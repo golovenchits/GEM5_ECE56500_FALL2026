@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Run a command inside the gem5 GCC 8 Docker container (Ubuntu 20.04).
+#
+# The repo is mounted at /gem5 and commands run as your own user, so build
+# output in build/ is owned by you. The image is built on first use from
+# util/dockerfiles/ubuntu-20.04_gcc-version.
+#
+# Usage:
+#   ./gem5-docker                                  # interactive shell
+#   ./gem5-docker scons build/ECE565-X86/gem5.opt -j$(nproc)
+#   ./gem5-docker build/ECE565-X86/gem5.opt configs/example/se.py ...
+#   ./gem5-docker --rebuild                        # rebuild the image
+#
+# Environment:
+#   GEM5_DOCKER_IMAGE  image tag to use (default: gem5-gcc8)
+#   GEM5_GCC_VERSION   gcc version to install in the image (default: 8)
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+IMAGE="${GEM5_DOCKER_IMAGE:-gem5-gcc8}"
+GCC_VERSION="${GEM5_GCC_VERSION:-8}"
+DOCKERFILE_DIR="$ROOT/util/dockerfiles/ubuntu-20.04_gcc-version"
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "gem5-docker: docker not found. Install it with:" >&2
+    echo "  sudo apt install docker.io docker-buildx" >&2
+    echo "  sudo usermod -aG docker \$USER   # then log out and back in" >&2
+    exit 1
+fi
+
+build_image() {
+    echo "gem5-docker: building image '$IMAGE' (gcc-$GCC_VERSION)..." >&2
+    docker build -t "$IMAGE" --build-arg version="$GCC_VERSION" \
+        "$DOCKERFILE_DIR"
+}
+
+if [[ "${1:-}" == "--rebuild" ]]; then
+    build_image
+    exit 0
+fi
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    build_image
+fi
+
+# Keep the same relative directory inside the container when run from a
+# subdirectory of the repo; anything outside the repo isn't mounted.
+case "$PWD/" in
+    "$ROOT"/*) WORKDIR="/gem5${PWD#"$ROOT"}" ;;
+    *)         WORKDIR="/gem5" ;;
+esac
+
+TTY_FLAGS=(-i)
+if [[ -t 0 && -t 1 ]]; then
+    TTY_FLAGS=(-it)
+fi
+
+if [[ $# -eq 0 ]]; then
+    set -- bash
+fi
+
+exec docker run --rm "${TTY_FLAGS[@]}" \
+    -u "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -v "$ROOT":/gem5 \
+    -w "$WORKDIR" \
+    "$IMAGE" "$@"
