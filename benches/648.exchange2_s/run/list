@@ -1,0 +1,5 @@
+run_base_refspeed_spectre_safebet-m64.0000 dir=/home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/benchspec/CPU/648.exchange2_s/run/run_base_refspeed_spectre_safebet-m64.0000 label=spectre_safebet-m64 lock=0 size=refspeed tune=base type=run username=green456
+run_base_refspeed_wrapped_both-m64.0000 dir=/home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/benchspec/CPU/648.exchange2_s/run/run_base_refspeed_wrapped_both-m64.0000 label=wrapped_both-m64 lock=0 size=refspeed tune=base type=run username=green456
+run_base_refspeed_wrapped_free-m64.0000 dir=/home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/benchspec/CPU/648.exchange2_s/run/run_base_refspeed_wrapped_free-m64.0000 label=wrapped_free-m64 lock=0 size=refspeed tune=base type=run username=green456
+run_base_refspeed_wrapped_malloc-m64.0000 dir=/home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/benchspec/CPU/648.exchange2_s/run/run_base_refspeed_wrapped_malloc-m64.0000 label=wrapped_malloc-m64 lock=0 size=refspeed tune=base type=run username=green456
+__END__

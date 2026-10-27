@@ -1,0 +1,78 @@
+-E BASH_ENV /usr/share/lmod/lmod/init/bash
+-E BASH_FUNC_ml() '() {  eval $($LMOD_DIR/ml_cmd "$@") }'
+-E BASH_FUNC_module() '() {  eval $($LMOD_CMD bash "$@") && eval $(${LMOD_SETTARG_CMD:-:} -s sh) }'
+-E CVS_RSH ssh
+-E HISTCONTROL ignoredups
+-E HISTSIZE 1000
+-E HOME /home/min/a/green456
+-E HOSTNAME mnemosyne.ecn.purdue.edu
+-E KDEDIRS /usr
+-E LAMMPS_POTENTIALS /usr/share/lammps/potentials
+-E LANG en_US.UTF-8
+-E LANGUAGE en_US.UTF-8
+-E LC_ALL C
+-E LC_CTYPE en_US.UTF-8
+-E LC_LANG C
+-E LD_LIBRARY_PATH /package/gcc/8.3.0/lib64/:/package/gcc/8.3.0/lib/:/lib64
+-E LESSOPEN '||/usr/bin/lesspipe.sh %s'
+-E LIBC_FATAL_STDERR_ 1
+-E LMOD_AVAIL_STYLE 'system:<grouped>'
+-E LMOD_CMD /usr/share/lmod/lmod/libexec/lmod
+-E LMOD_COLORIZE yes
+-E LMOD_DIR /usr/share/lmod/lmod/libexec
+-E LMOD_FULL_SETTARG_SUPPORT no
+-E LMOD_PACKAGE_PATH /etc/lmod
+-E LMOD_PKG /usr/share/lmod/lmod
+-E LMOD_PREPEND_BLOCK normal
+-E LMOD_ROOT /usr/share/lmod
+-E LMOD_SETTARG_CMD :
+-E LMOD_SETTARG_FULL_SUPPORT no
+-E LMOD_VERSION 8.2.7
+-E LMOD_arch x86_64
+-E LMOD_sys Linux
+-E LOADEDMODULES gcc/8.3.0
+-E LOGNAME green456
+-E LS_COLORS 'rs=0:di=38;5;27:ln=38;5;51:mh=44;38;5;15:pi=40;38;5;11:so=38;5;13:do=38;5;5:bd=48;5;232;38;5;11:cd=48;5;232;38;5;3:or=48;5;232;38;5;9:mi=05;48;5;232;38;5;15:su=48;5;196;38;5;15:sg=48;5;11;38;5;16:ca=48;5;196;38;5;226:tw=48;5;10;38;5;16:ow=48;5;10;38;5;21:st=48;5;21;38;5;15:ex=38;5;34:*.tar=38;5;9:*.tgz=38;5;9:*.arc=38;5;9:*.arj=38;5;9:*.taz=38;5;9:*.lha=38;5;9:*.lz4=38;5;9:*.lzh=38;5;9:*.lzma=38;5;9:*.tlz=38;5;9:*.txz=38;5;9:*.tzo=38;5;9:*.t7z=38;5;9:*.zip=38;5;9:*.z=38;5;9:*.Z=38;5;9:*.dz=38;5;9:*.gz=38;5;9:*.lrz=38;5;9:*.lz=38;5;9:*.lzo=38;5;9:*.xz=38;5;9:*.bz2=38;5;9:*.bz=38;5;9:*.tbz=38;5;9:*.tbz2=38;5;9:*.tz=38;5;9:*.deb=38;5;9:*.rpm=38;5;9:*.jar=38;5;9:*.war=38;5;9:*.ear=38;5;9:*.sar=38;5;9:*.rar=38;5;9:*.alz=38;5;9:*.ace=38;5;9:*.zoo=38;5;9:*.cpio=38;5;9:*.7z=38;5;9:*.rz=38;5;9:*.cab=38;5;9:*.jpg=38;5;13:*.jpeg=38;5;13:*.gif=38;5;13:*.bmp=38;5;13:*.pbm=38;5;13:*.pgm=38;5;13:*.ppm=38;5;13:*.tga=38;5;13:*.xbm=38;5;13:*.xpm=38;5;13:*.tif=38;5;13:*.tiff=38;5;13:*.png=38;5;13:*.svg=38;5;13:*.svgz=38;5;13:*.mng=38;5;13:*.pcx=38;5;13:*.mov=38;5;13:*.mpg=38;5;13:*.mpeg=38;5;13:*.m2v=38;5;13:*.mkv=38;5;13:*.webm=38;5;13:*.ogm=38;5;13:*.mp4=38;5;13:*.m4v=38;5;13:*.mp4v=38;5;13:*.vob=38;5;13:*.qt=38;5;13:*.nuv=38;5;13:*.wmv=38;5;13:*.asf=38;5;13:*.rm=38;5;13:*.rmvb=38;5;13:*.flc=38;5;13:*.avi=38;5;13:*.fli=38;5;13:*.flv=38;5;13:*.gl=38;5;13:*.dl=38;5;13:*.xcf=38;5;13:*.xwd=38;5;13:*.yuv=38;5;13:*.cgm=38;5;13:*.emf=38;5;13:*.axv=38;5;13:*.anx=38;5;13:*.ogv=38;5;13:*.ogx=38;5;13:*.aac=38;5;45:*.au=38;5;45:*.flac=38;5;45:*.mid=38;5;45:*.midi=38;5;45:*.mka=38;5;45:*.mp3=38;5;45:*.mpc=38;5;45:*.ogg=38;5;45:*.ra=38;5;45:*.wav=38;5;45:*.axa=38;5;45:*.oga=38;5;45:*.spx=38;5;45:*.xspf=38;5;45:'
+-E MAIL /var/spool/mail/green456
+-E MANPATH /usr/share/lmod/lmod/share/man:
+-E MODULEPATH /etc/modulefiles:/usr/share/modulefiles:/etc/modulefiles/pkg:/package/modulefiles/ecn/common:/package/modulefiles/ecn/centos
+-E MODULEPATH_LOCAL /etc/modulefiles
+-E MODULEPATH_PACKAGE /package/modulefiles/ecn
+-E MODULESHOME /usr/share/lmod/lmod
+-E MSI2LMP_LIBRARY /usr/share/lammps/frc_files
+-E OMP_NUM_THREADS 1
+-E OMP_THREAD_LIMIT 1
+-E PATH /home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/bin:/package/gcc/8.3.0/bin:/home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/bin:/usr/lib64/qt-3.3/bin:/usr/lib64/ccache:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:.
+-E QTDIR /usr/lib64/qt-3.3
+-E QTINC /usr/lib64/qt-3.3/include
+-E QTLIB /usr/lib64/qt-3.3/lib
+-E QT_GRAPHICSSYSTEM_CHECKED 1
+-E QT_PLUGIN_PATH /usr/lib64/kde4/plugins:/usr/lib/kde4/plugins
+-E SHELL /bin/bash
+-E SPEC /home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017
+-E SPECDB_PWD /home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017
+-E SPECPERLLIB /home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/bin/lib:/home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/bin
+-E SSH_CLIENT '69.174.156.16 28946 22'
+-E SSH_CONNECTION '69.174.156.16 28946 128.46.32.30 22'
+-E SSH_TTY /dev/pts/22
+-E STY 12249.build_base_int
+-E TERM screen
+-E TERMCAP 'SC|screen|VT 100/ANSI X3.64 virtual terminal:\ 	:DO=\E[%dB:LE=\E[%dD:RI=\E[%dC:UP=\E[%dA:bs:bt=\E[Z:\ 	:cd=\E[J:ce=\E[K:cl=\E[H\E[J:cm=\E[%i%d;%dH:ct=\E[3g:\ 	:do=^J:nd=\E[C:pt:rc=\E8:rs=\Ec:sc=\E7:st=\EH:up=\EM:\ 	:le=^H:bl=^G:cr=^M:it#8:ho=\E[H:nw=\EE:ta=^I:is=\E)0:\ 	:li#74:co#317:am:xn:xv:LP:sr=\EM:al=\E[L:AL=\E[%dL:\ 	:cs=\E[%i%d;%dr:dl=\E[M:DL=\E[%dM:dc=\E[P:DC=\E[%dP:\ 	:im=\E[4h:ei=\E[4l:mi:IC=\E[%d@:ks=\E[?1h\E=:\ 	:ke=\E[?1l\E>:vi=\E[?25l:ve=\E[34h\E[?25h:vs=\E[34l:\ 	:ti=\E[?1049h:te=\E[?1049l:us=\E[4m:ue=\E[24m:so=\E[3m:\ 	:se=\E[23m:mb=\E[5m:md=\E[1m:mr=\E[7m:me=\E[m:ms:\ 	:Co#8:pa#64:AF=\E[3%dm:AB=\E[4%dm:op=\E[39;49m:AX:\ 	:vb=\Eg:G0:as=\E(0:ae=\E(B:\ 	:ac=\140\140aaffggjjkkllmmnnooppqqrrssttuuvvwwxxyyzz{{||}}~~..--++,,hhII00:\ 	:po=\E[5i:pf=\E[4i:Km=\E[M:k0=\E[10~:k1=\EOP:k2=\EOQ:\ 	:k3=\EOR:k4=\EOS:k5=\E[15~:k6=\E[17~:k7=\E[18~:\ 	:k8=\E[19~:k9=\E[20~:k;=\E[21~:F1=\E[23~:F2=\E[24~:\ 	:F3=\E[1;2P:F4=\E[1;2Q:F5=\E[1;2R:F6=\E[1;2S:\ 	:F7=\E[15;2~:F8=\E[17;2~:F9=\E[18;2~:FA=\E[19;2~:kb=:\ 	:K2=\EOE:kB=\E[Z:kF=\E[1;2B:kR=\E[1;2A:*4=\E[3;2~:\ 	:*7=\E[1;2F:#2=\E[1;2H:#3=\E[2;2~:#4=\E[1;2D:%c=\E[6;2~:\ 	:%e=\E[5;2~:%i=\E[1;2C:kh=\E[1~:@1=\E[1~:kH=\E[4~:\ 	:@7=\E[4~:kN=\E[6~:kP=\E[5~:kI=\E[2~:kD=\E[3~:ku=\EOA:\ 	:kd=\EOB:kr=\EOC:kl=\EOD:km:'
+-E USER green456
+-E WINDOW 0
+-E XDG_DATA_DIRS /home/min/a/green456/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share
+-E XDG_RUNTIME_DIR /run/user/765366
+-E XDG_SESSION_ID 1129
+-E _LMFILES_ /package/modulefiles/ecn/centos/gcc/8.3.0.lua
+-E _ModuleTable001_ X01vZHVsZVRhYmxlXz17WyJNVHZlcnNpb24iXT0zLFsiY19yZWJ1aWxkVGltZSJdPWZhbHNlLFsiY19zaG9ydFRpbWUiXT1mYWxzZSxkZXB0aFQ9e30sZmFtaWx5PXt9LG1UPXtnY2M9e1siZm4iXT0iL3BhY2thZ2UvbW9kdWxlZmlsZXMvZWNuL2NlbnRvcy9nY2MvOC4zLjAubHVhIixbImZ1bGxOYW1lIl09ImdjYy84LjMuMCIsWyJsb2FkT3JkZXIiXT0xLHByb3BUPXt9LFsic3RhY2tEZXB0aCJdPTAsWyJzdGF0dXMiXT0iYWN0aXZlIixbInVzZXJOYW1lIl09ImdjYyIsfSx9LG1wYXRoQT17Ii9ldGMvbW9kdWxlZmlsZXMiLCIvdXNyL3NoYXJlL21vZHVsZWZpbGVzIiwiL2V0Yy9tb2R1bGVmaWxlcy9wa2ciLCIvcGFja2FnZS9tb2R1bGVmaWxlcy9lY24vY29tbW9uIiwiL3Bh
+-E _ModuleTable002_ Y2thZ2UvbW9kdWxlZmlsZXMvZWNuL2NlbnRvcyIsfSxbInN5c3RlbUJhc2VNUEFUSCJdPSIvZXRjL21vZHVsZWZpbGVzOi91c3Ivc2hhcmUvbW9kdWxlZmlsZXM6L2V0Yy9tb2R1bGVmaWxlcy9wa2c6L3BhY2thZ2UvbW9kdWxlZmlsZXMvZWNuL2NvbW1vbjovcGFja2FnZS9tb2R1bGVmaWxlcy9lY24vY2VudG9zIix9
+-E _ModuleTable_Sz_ 2
+-E __LMOD_REF_COUNT_LD_LIBRARY_PATH '/package/gcc/8.3.0/lib64:1;/package/gcc/8.3.0/lib:1'
+-E __LMOD_REF_COUNT_LOADEDMODULES gcc/8.3.0:1
+-E __LMOD_REF_COUNT_MODULEPATH '/etc/modulefiles:1;/usr/share/modulefiles:1;/etc/modulefiles/pkg:1;/package/modulefiles/ecn/common:1;/package/modulefiles/ecn/centos:1'
+-E __LMOD_REF_COUNT_PATH '/package/gcc/8.3.0/bin:1;/home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/bin:1;/usr/lib64/qt-3.3/bin:1;/usr/lib64/ccache:1;/usr/local/bin:1;/usr/bin:1;/usr/local/sbin:1;/usr/sbin:1;.:1'
+-E __LMOD_REF_COUNT__LMFILES_ /package/modulefiles/ecn/centos/gcc/8.3.0.lua:1
+-r
+-N C
+-C /home/yara/mithuna2/green456/SPEC-OSG-2021/SPEC_2017/benchspec/CPU/605.mcf_s/run/run_base_refspeed_wrapped_malloc-m64.0000
+-o inp.out -e inp.err ../run_base_refspeed_wrapped_malloc-m64.0000/mcf_s_base.wrapped_malloc-m64 inp.in  > inp.out 2>> inp.err

@@ -78,8 +78,10 @@ def get_process(options, target_isa="arm"):
     ### SPEC 2017
     # X86 binaries
     output_dir = '/tmp/'
-    bench_dir_17 = '/home/yara/mithuna2/green456/benchmark_sources/'\
-                   'SPEC-OSG-2021/SPEC_2017/benchspec/CPU/'
+    # Resolve relative to the repo so it works on the host and inside
+    # gem5-docker (where the repo is mounted at /gem5)
+    bench_dir_17 = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                '..', '..', 'benches') + '/'
     if(check_spec2k17(options)):
       exe_suffix = '_base.spectre_safebet-m64'
 
