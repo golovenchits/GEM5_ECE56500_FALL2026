@@ -351,6 +351,12 @@ IEW::setScoreboard(Scoreboard *sb_ptr)
     scoreboard = sb_ptr;
 }
 
+void
+IEW::setWIB(WIB *wib_ptr)
+{
+    wib = wib_ptr;
+}
+
 bool
 IEW::isDrained() const
 {
@@ -556,6 +562,17 @@ void
 IEW::blockMemInst(const DynInstPtr& inst)
 {
     instQueue.blockMemInst(inst);
+}
+
+void IEW::loadMissed(const DynInstPtr& inst){
+    // TODO: allocate bit-vector column here
+    inst->bvaColIdx = wib->allocateLoadCol(inst);
+
+    // set wait bit & load idx in IQ
+    instQueue.markRegWait(inst);
+
+    // TODO: pretend-wake dependents
+    
 }
 
 void

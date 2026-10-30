@@ -54,6 +54,7 @@
 #include "cpu/timebuf.hh"
 #include "debug/IEW.hh"
 #include "sim/probe/probe.hh"
+#include "cpu/o3/wib.hh"
 
 namespace gem5
 {
@@ -156,6 +157,9 @@ class IEW
     /** Sets pointer to the scoreboard. */
     void setScoreboard(Scoreboard *sb_ptr);
 
+    /** Sets pointer to the WIB. */
+    void setWIB(WIB *wib_ptr);
+
     /** Perform sanity checks after a drain. */
     void drainSanityCheck() const;
 
@@ -181,6 +185,8 @@ class IEW
 
     /** Moves memory instruction onto the list of cache blocked instructions */
     void blockMemInst(const DynInstPtr &inst);
+
+    void loadMissed(const DynInstPtr &inst);
 
     /** Notifies that the cache has become unblocked */
     void cacheUnblocked();
@@ -353,6 +359,9 @@ class IEW
   public:
     /** Instruction queue. */
     InstructionQueue instQueue;
+
+    /** WIB interface. */
+    WIB *wib;
 
     /** Load / store queue. */
     LSQ ldstQueue;

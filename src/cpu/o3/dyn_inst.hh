@@ -146,6 +146,8 @@ class DynInst : public ExecContext, public RefCounted
         IqEntry,                 /// Instruction is in the IQ
         RobEntry,                /// Instruction is in the ROB
         LsqEntry,                /// Instruction is in the LSQ
+        WibEntry,                /// Instruction is in the WIB
+        Wait,                    /// Instruction is waiting
         Completed,               /// Instruction has completed
         ResultReady,             /// Instruction has its result
         CanIssue,                /// Instruction can issue and execute
@@ -329,6 +331,9 @@ class DynInst : public ExecContext, public RefCounted
     /** How many source registers are ready. */
     uint8_t readyRegs = 0;
 
+    // How many source regs are waiting
+    uint8_t waitRegs = 0;
+
   public:
     /////////////////////// Load Store Data //////////////////////
     /** The effective virtual address (lds & stores only). */
@@ -353,6 +358,10 @@ class DynInst : public ExecContext, public RefCounted
     /** Store queue index. */
     ssize_t sqIdx = -1;
     typename LSQUnit::SQIterator sqIt;
+
+    unsigned wibIdx = 0;
+
+    int bvaColIdx = -1;
 
 
     /////////////////////// TLB Miss //////////////////////
@@ -843,6 +852,14 @@ class DynInst : public ExecContext, public RefCounted
 
     /** Returns whether pinned registers are renamed */
     bool isPinnedRegsRenamed() const { return status[PinnedRegsRenamed]; }
+
+
+    void setInWIB() { status.set(WibEntry); }
+
+    void clearInWIB() {status.reset(WibEntry); }
+
+    bool isInWIB() const { return status[WibEntry]; }
+
 
     /** Sets the destination registers as renamed */
     void

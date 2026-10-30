@@ -125,8 +125,8 @@ class BaseO3CPU(BaseCPU):
     forwardComSize = Param.Unsigned(5,
             "Time buffer size for forward communication")
 
-    LQEntries = Param.Unsigned(32, "Number of load queue entries")
-    SQEntries = Param.Unsigned(32, "Number of store queue entries")
+    LQEntries = Param.Unsigned(1024, "Number of load queue entries")
+    SQEntries = Param.Unsigned(1024, "Number of store queue entries")
     LSQDepCheckShift = Param.Unsigned(4,
             "Number of places to shift addr before check")
     LSQCheckLoads = Param.Bool(True,
@@ -151,7 +151,10 @@ class BaseO3CPU(BaseCPU):
     # most ISAs don't use condition-code regs, so default is 0
     numPhysCCRegs = Param.Unsigned(0, "Number of physical cc registers")
     numIQEntries = Param.Unsigned(64, "Number of instruction queue entries")
-    numROBEntries = Param.Unsigned(192, "Number of reorder buffer entries")
+    numROBEntries = Param.Unsigned(2048, "Number of reorder buffer entries")
+
+    wibToIQWidth = Param.Unsigned(8, "Width of WIB to IQ")
+    numWIBBitVectors = Param.Unsigned(64, "Number of WIB bit-vectors (max outstanding load misses tracked)")
 
     smtNumFetchingThreads = Param.Unsigned(1, "SMT Number of Fetching Threads")
     smtFetchPolicy = Param.SMTFetchPolicy('RoundRobin', "SMT Fetch policy")

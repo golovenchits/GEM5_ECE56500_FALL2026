@@ -56,6 +56,7 @@ if env['CONF']['TARGET_ISA'] != 'null':
     Source('store_set.cc')
     Source('thread_context.cc')
     Source('thread_state.cc')
+    Source('wib.cc')
 
     DebugFlag('CommitRate')
     DebugFlag('IEW')
@@ -68,6 +69,7 @@ if env['CONF']['TARGET_ISA'] != 'null':
     DebugFlag('Rename')
     DebugFlag('Scoreboard')
     DebugFlag('StoreSet')
+    DebugFlag('WIB')
     DebugFlag('Writeback')
 
     CompoundFlag('O3CPUAll', [ 'Fetch', 'Decode', 'Rename', 'IEW', 'Commit',

@@ -295,6 +295,7 @@ DynInst::dump(std::string &outstring)
 void
 DynInst::markSrcRegReady()
 {
+    // TODO: this also needs to check wait bits to see if it's pretend ready
     DPRINTF(IQ, "[sn:%lli] has %d ready out of %d sources. RTI %d)\n",
             seqNum, readyRegs+1, numSrcRegs(), readyToIssue());
     if (++readyRegs == numSrcRegs()) {
@@ -307,6 +308,11 @@ DynInst::markSrcRegReady(RegIndex src_idx)
 {
     readySrcIdx(src_idx, true);
     markSrcRegReady();
+}
+
+void DynInst::markSrcRegWaiting(RegIndex src_idx)
+{
+    
 }
 
 

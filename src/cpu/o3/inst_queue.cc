@@ -117,6 +117,9 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
     // Resize the register scoreboard.
     regScoreboard.resize(numPhysRegs);
 
+    regWaitBits.resize(numPhysRegs);
+    regWaitLoad.resize(numPhysRegs);
+
     //Initialize Mem Dependence Units
     for (ThreadID tid = 0; tid < MaxThreads; tid++) {
         memDepUnit[tid].init(params, tid, cpu_ptr);
@@ -408,6 +411,8 @@ InstructionQueue::resetState()
     // unready.
     for (int i = 0; i < numPhysRegs; ++i) {
         regScoreboard[i] = false;
+        regWaitBits[i] = false;
+        regWaitLoad[i] = -1;
     }
 
     for (ThreadID tid = 0; tid < MaxThreads; ++tid) {
@@ -1580,6 +1585,26 @@ InstructionQueue::dumpInsts()
         inst_list_it++;
         ++num;
     }
+}
+
+void InstructionQueue::markRegWait(const DynInstPtr &missed_ld){
+
+    int8_t total_dest_regs = missed_ld->numDestRegs();
+
+    for (int dest_reg_idx = 0;
+         dest_reg_idx < total_dest_regs;
+         dest_reg_idx++)
+    {
+        PhysRegIdPtr dest_reg = missed_ld->renamedDestIdx(dest_reg_idx);
+
+        if (dest_reg->isFixedMapping()) {
+            continue;
+        }
+
+        regWaitBits[dest_reg->flatIndex()] = true;
+        regWaitLoad[dest_reg->flatIndex()] = missed_ld->bvaColIdx;
+    }
+    
 }
 
 } // namespace o3

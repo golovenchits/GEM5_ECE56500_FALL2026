@@ -309,6 +309,7 @@ Commit::setRenameMap(UnifiedRenameMap rm_ptr[])
 }
 
 void Commit::setROB(ROB *rob_ptr) { rob = rob_ptr; }
+void Commit::setWIB(WIB *wib_ptr) { wib = wib_ptr; }
 
 void
 Commit::startupStage()
@@ -359,6 +360,7 @@ Commit::drainSanityCheck() const
 {
     assert(isDrained());
     rob->drainSanityCheck();
+    wib->drainSanityCheck();
 
     // hardware transactional memory
     // cannot drain partially through a transaction
@@ -409,6 +411,7 @@ Commit::takeOverFrom()
         squashAfterInst[tid] = NULL;
     }
     rob->takeOverFrom();
+    wib->takeOverFrom();
 }
 
 void
@@ -1005,6 +1008,7 @@ Commit::commitInsts()
                     "ROB.\n");
 
             rob->retireHead(commit_thread);
+            wib->retireHead(head_inst->wibIdx);
 
             ++stats.commitSquashedInsts;
             // Notify potential listeners that this instruction is squashed
@@ -1311,6 +1315,7 @@ Commit::commitHead(const DynInstPtr &head_inst, unsigned inst_num)
 
     // Finally clear the head ROB entry.
     rob->retireHead(tid);
+    wib->retireHead(head_inst->wibIdx);
 
 #if TRACING_ON
     if (debug::O3PipeView) {
@@ -1347,6 +1352,7 @@ Commit::getInsts()
                     tid, inst->seqNum, inst->pcState());
 
             rob->insertInst(inst);
+            wib->insertInst(inst);
 
             assert(rob->getThreadEntries(tid) <= rob->getMaxEntries(tid));
 

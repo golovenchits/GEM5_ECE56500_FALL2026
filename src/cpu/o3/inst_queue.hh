@@ -277,6 +277,8 @@ class InstructionQueue
     /** Debug function to print all instructions. */
     void printInsts();
 
+    void markRegWait(const DynInstPtr &missed_ld);
+
   private:
     /** Does the actual squashing. */
     void doSquash(ThreadID tid);
@@ -453,6 +455,10 @@ class InstructionQueue
      *  the scoreboard that exists in the rename map.
      */
     std::vector<bool> regScoreboard;
+
+    std::vector<bool> regWaitBits;
+
+    std::vector<int> regWaitLoad;
 
     /** Adds an instruction to the dependency graph, as a consumer. */
     bool addToDependents(const DynInstPtr &new_inst);
