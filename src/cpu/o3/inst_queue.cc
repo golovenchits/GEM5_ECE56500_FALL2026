@@ -118,7 +118,7 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
     regScoreboard.resize(numPhysRegs);
 
     regWaitBits.resize(numPhysRegs);
-    regWaitLoad.resize(numPhysRegs);
+    regLoadBvaIdx.resize(numPhysRegs);
 
     //Initialize Mem Dependence Units
     for (ThreadID tid = 0; tid < MaxThreads; tid++) {
@@ -412,7 +412,7 @@ InstructionQueue::resetState()
     for (int i = 0; i < numPhysRegs; ++i) {
         regScoreboard[i] = false;
         regWaitBits[i] = false;
-        regWaitLoad[i] = -1;
+        regLoadBvaIdx[i] = -1;
     }
 
     for (ThreadID tid = 0; tid < MaxThreads; ++tid) {
@@ -948,8 +948,8 @@ InstructionQueue::movePretendReadyInstsToWIB(int movableWidth)
         for (int i = 0; i < inst->numSrcRegs(); i++) {
             RegIndex flat = inst->renamedSrcIdx(i)->flatIndex();
             if (inst->waitingSrcIdx(i) && regWaitBits[flat] &&
-                    !wib->isColDone(regWaitLoad[flat])) {
-                col = regWaitLoad[flat];
+                    !wib->isColDone(regLoadBvaIdx[flat])) {
+                col = regLoadBvaIdx[flat];
                 break;
             }
         }
@@ -960,7 +960,8 @@ InstructionQueue::movePretendReadyInstsToWIB(int movableWidth)
             continue;
         }
 
-        // Take it off the chains of its waiting sources; the rest are ready
+        // Take the instruction off the chains of its waiting sources; the rest are ready
+        // This is to say that the instruction is no longer waiting on those sources
         for (int i = 0; i < inst->numSrcRegs(); i++) {
             if (inst->waitingSrcIdx(i)) {
                 dependGraph.remove(inst->renamedSrcIdx(i)->flatIndex(), inst);
@@ -1137,7 +1138,7 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
 
         // The value is here, so the register no longer waits on a miss.
         regWaitBits[dest_reg->flatIndex()] = false;
-        regWaitLoad[dest_reg->flatIndex()] = -1;
+        regLoadBvaIdx[dest_reg->flatIndex()] = -1;
     }
     return dependents;
 }
@@ -1493,7 +1494,7 @@ InstructionQueue::addToProducers(const DynInstPtr &new_inst)
         regScoreboard[dest_reg->flatIndex()] = false;
 
         regWaitBits[dest_reg->flatIndex()] = false;
-        regWaitLoad[dest_reg->flatIndex()] = -1;
+        regLoadBvaIdx[dest_reg->flatIndex()] = -1;
     }
 }
 
@@ -1723,37 +1724,27 @@ InstructionQueue::pretendWakeDependents(const DynInstPtr &inst, int col)
         // Instructions inserted from now on see the wait bit in
         // addToDependents().
         regWaitBits[dest_reg->flatIndex()] = true;
-        regWaitLoad[dest_reg->flatIndex()] = col;
+        regLoadBvaIdx[dest_reg->flatIndex()] = col;
 
         // Mark the source as waiting in every current dependent. They stay
         // on the register's chain so the real wakeup still reaches them; an
         // instruction moved to the WIB is removed from the chain then.
-        std::vector<DynInstPtr> waiting;
-        DynInstPtr dep_inst = dependGraph.pop(dest_reg->flatIndex());
+        dependGraph.forEach(dest_reg->flatIndex(),
+            [&](const DynInstPtr &dep_inst) {
+                DPRINTF(IQ, "Pretend-waking up a dependent instruction, "
+                        "[sn:%llu] PC %s.\n", dep_inst->seqNum,
+                        dep_inst->pcState());
 
-        while (dep_inst) {
-            waiting.push_back(dep_inst);
-            dep_inst = dependGraph.pop(dest_reg->flatIndex());
-        }
+                int src_idx = dep_inst->unreadySrcIdxOf(dest_reg, true);
+                if (src_idx >= 0) {
+                    dep_inst->markSrcRegWaiting(src_idx);
+                }
 
-        // Put them back in their original order
-        for (auto it = waiting.rbegin(); it != waiting.rend(); ++it) {
-            dep_inst = *it;
+                // Only queues it; nothing changes the chain being walked
+                addIfPretendReady(dep_inst);
 
-            DPRINTF(IQ, "Pretend-waking up a dependent instruction, [sn:%llu] "
-                    "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
-
-            int src_idx = dep_inst->unreadySrcIdxOf(dest_reg, true);
-            if (src_idx >= 0) {
-                dep_inst->markSrcRegWaiting(src_idx);
-            }
-
-            addIfPretendReady(dep_inst);
-
-            dependGraph.insert(dest_reg->flatIndex(), dep_inst);
-
-            ++dependents;
-        }
+                ++dependents;
+            });
     }
 
     return dependents;

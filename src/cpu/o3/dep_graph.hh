@@ -109,6 +109,17 @@ class DependencyGraph
     /** Removes and returns the newest dependent of a specific register. */
     DynInstPtr pop(RegIndex idx);
 
+    /** Calls func on every dependent of a specific register, newest first,
+     *  without removing them. func must not modify that register's list.
+     */
+    template <class Func>
+    void
+    forEach(RegIndex idx, Func func)
+    {
+        for (DepEntry *curr = dependGraph[idx].next; curr; curr = curr->next)
+            func(curr->inst);
+    }
+
     /** Checks if the entire dependency graph is empty. */
     bool empty() const;
 

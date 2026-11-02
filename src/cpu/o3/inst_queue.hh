@@ -482,7 +482,7 @@ class InstructionQueue
     /** Per physical register: the load miss (bit-vector index) it waits on.
      *  Only meaningful when the register's wait bit is set.
      */
-    std::vector<int> regWaitLoad;
+    std::vector<int> regLoadBvaIdx;
 
     /** Adds an instruction to the dependency graph, as a consumer. */
     bool addToDependents(const DynInstPtr &new_inst);
