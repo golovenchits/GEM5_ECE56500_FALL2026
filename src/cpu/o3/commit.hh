@@ -171,6 +171,7 @@ class Commit
 
     /** Sets pointer to the ROB. */
     void setROB(ROB *rob_ptr);
+    void setWIB(WIB *wib_ptr);
 
     /** Initializes stage by sending back the number of free entries. */
     void startupStage();
@@ -340,6 +341,7 @@ class Commit
   public:
     /** ROB interface. */
     ROB *rob;
+    WIB *wib;
 
   private:
     /** Pointer to O3CPU. */

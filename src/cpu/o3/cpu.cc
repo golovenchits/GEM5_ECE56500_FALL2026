@@ -97,6 +97,7 @@ CPU::CPU(const BaseO3CPUParams &params)
       freeList(name() + ".freelist", &regFile),
 
       rob(this, params),
+      wib(this, params),
 
       scoreboard(name() + ".scoreboard", regFile.totalNumPhysRegs()),
 
@@ -244,6 +245,11 @@ CPU::CPU(const BaseO3CPUParams &params)
 
     // Setup the ROB for whichever stages need it.
     commit.setROB(&rob);
+
+    // Setup the WIB for whichever stages need it.
+    iew.setWIB(&wib);
+    commit.setWIB(&wib);
+
 
     lastActivatedCycle = 0;
 

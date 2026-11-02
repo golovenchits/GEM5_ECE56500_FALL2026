@@ -64,6 +64,7 @@
 #include "cpu/o3/rob.hh"
 #include "cpu/o3/scoreboard.hh"
 #include "cpu/o3/thread_state.hh"
+#include "cpu/o3/wib.hh"
 #include "cpu/activity.hh"
 #include "cpu/base.hh"
 #include "cpu/simple_thread.hh"
@@ -428,6 +429,9 @@ class CPU : public BaseCPU
 
     /** The re-order buffer. */
     ROB rob;
+
+    /** The waiting instruction buffer. */
+    WIB wib;
 
     /** Active Threads List */
     std::list<ThreadID> activeThreads;

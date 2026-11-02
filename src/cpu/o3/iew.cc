@@ -351,6 +351,12 @@ IEW::setScoreboard(Scoreboard *sb_ptr)
     scoreboard = sb_ptr;
 }
 
+void
+IEW::setWIB(WIB *wib_ptr)
+{
+    wib = wib_ptr;
+}
+
 bool
 IEW::isDrained() const
 {
@@ -556,6 +562,28 @@ void
 IEW::blockMemInst(const DynInstPtr& inst)
 {
     instQueue.blockMemInst(inst);
+}
+
+void
+IEW::loadMissed(const DynInstPtr& inst)
+{
+    // Nothing waits on a squashed load or one without destinations, and a
+    // replayed load that misses again already owns a bit-vector.
+    if (inst->isSquashed() || inst->numDestRegs() == 0 ||
+            inst->ownedCol >= 0) {
+        return;
+    }
+
+    // allocate bit-vector column here
+    inst->ownedCol = wib->allocateLoadCol(inst);
+
+    // Out of bit-vectors: dependents keep waiting in the IQ
+    if (inst->ownedCol < 0) {
+        return;
+    }
+
+    // pretend wake dependents and set their wait bits
+    instQueue.pretendWakeDependents(inst, inst->ownedCol);
 }
 
 void
@@ -1465,7 +1493,11 @@ IEW::tick()
         // Have the instruction queue try to schedule any ready instructions.
         // (In actuality, this scheduling is for instructions that will
         // be executed next cycle.)
-        instQueue.scheduleReadyInsts();
+        int issued = instQueue.scheduleReadyInsts();
+        
+        if (instQueue.movePretendReadyInstsToWIB(issueWidth - issued)) {
+            updatedQueues = true;
+        }
 
         // Also should advance its own time buffers if the stage ran.
         // Not the best place for it, but this works (hopefully).

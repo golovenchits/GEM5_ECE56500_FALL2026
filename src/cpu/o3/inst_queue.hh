@@ -224,7 +224,13 @@ class InstructionQueue
      * Schedules ready instructions, adding the ready ones (oldest first) to
      * the queue to execute.
      */
-    void scheduleReadyInsts();
+    int scheduleReadyInsts();
+
+    /** Moves up to movableWidth pretend-ready instructions (oldest first)
+     *  from the IQ to the WIB, freeing their IQ entries.
+     *  @return The number of instructions moved.
+     */
+    int movePretendReadyInstsToWIB(int movableWidth);
 
     /** Schedules a single specific non-speculative instruction. */
     void scheduleNonSpec(const InstSeqNum &inst);
@@ -276,6 +282,15 @@ class InstructionQueue
 
     /** Debug function to print all instructions. */
     void printInsts();
+
+    /** Sets the wait bits on an instruction's destinations (a missed load,
+     *  or an instruction just moved to the WIB) and marks its dependents'
+     *  sources as waiting, so they can move to the WIB.
+     *  @param inst The instruction whose result waits on a load miss.
+     *  @param col  The load miss's bit-vector column.
+     *  @return The number of dependents marked.
+     */
+    int pretendWakeDependents(const DynInstPtr &inst, int col);
 
   private:
     /** Does the actual squashing. */
@@ -355,6 +370,13 @@ class InstructionQueue
      *  class to allow for easy mapping to FUs.
      */
     ReadyInstQueue readyInsts[Num_OpClasses];
+
+    /** Pretend-ready instructions waiting to be moved to the WIB, oldest
+     *  first. They use no FU, so they are not separated by op class. An
+     *  instruction may appear more than once or become stale (issued,
+     *  squashed, or truly ready); check it before moving it.
+     */
+    ReadyInstQueue pretendReadyInsts;
 
     /** List of non-speculative instructions that will be scheduled
      *  once the IQ gets a signal from commit.  While it's redundant to
@@ -454,6 +476,14 @@ class InstructionQueue
      */
     std::vector<bool> regScoreboard;
 
+    /** Per physical register: its value is pending on a load cache miss. */
+    std::vector<bool> regWaitBits;
+
+    /** Per physical register: the load miss (bit-vector index) it waits on.
+     *  Only meaningful when the register's wait bit is set.
+     */
+    std::vector<int> regWaitLoad;
+
     /** Adds an instruction to the dependency graph, as a consumer. */
     bool addToDependents(const DynInstPtr &new_inst);
 
@@ -462,6 +492,11 @@ class InstructionQueue
 
     /** Moves an instruction to the ready queue if it is ready. */
     void addIfReady(const DynInstPtr &inst);
+
+    /** Moves an instruction to the pretend-ready queue if all of its
+     *  sources are ready or waiting on a load miss.
+     */
+    void addIfPretendReady(const DynInstPtr &inst);
 
     /** Debugging function to count how many entries are in the IQ.  It does
      *  a linear walk through the instructions, so do not call this function

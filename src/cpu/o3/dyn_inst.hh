@@ -93,6 +93,7 @@ class DynInst : public ExecContext, public RefCounted
         PhysRegIdPtr *prevDestIdx;
         PhysRegIdPtr *srcIdx;
         uint8_t *readySrcIdx;
+        uint8_t *waitingSrcIdx;
     };
 
     static void *operator new(size_t count, Arrays &arrays);
@@ -146,9 +147,12 @@ class DynInst : public ExecContext, public RefCounted
         IqEntry,                 /// Instruction is in the IQ
         RobEntry,                /// Instruction is in the ROB
         LsqEntry,                /// Instruction is in the LSQ
+        WibEntry,                /// Instruction is in the WIB
+        Wait,                    /// Instruction is waiting
         Completed,               /// Instruction has completed
         ResultReady,             /// Instruction has its result
         CanIssue,                /// Instruction can issue and execute
+        CanMoveToWIB,
         Issued,                  /// Instruction has issued
         Executed,                /// Instruction has executed
         CanCommit,               /// Instruction can commit
@@ -236,6 +240,8 @@ class DynInst : public ExecContext, public RefCounted
     // Whether or not the source register is ready, one bit per register.
     uint8_t *_readySrcIdx;
 
+    uint8_t *_waitingSrcIdx;
+    
   public:
     size_t numSrcs() const { return _numSrcs; }
     size_t numDests() const { return _numDests; }
@@ -313,6 +319,20 @@ class DynInst : public ExecContext, public RefCounted
         replaceBits(byte, idx % 8, ready ? 1 : 0);
     }
 
+    bool
+    waitingSrcIdx(int idx) const
+    {
+        uint8_t &byte = _waitingSrcIdx[idx / 8];
+        return bits(byte, idx % 8);
+    }
+
+    void
+    waitingSrcIdx(int idx, bool waiting)
+    {
+        uint8_t &byte = _waitingSrcIdx[idx / 8];
+        replaceBits(byte, idx % 8, waiting ? 1 : 0);
+    }
+
     /** The thread this instruction is from. */
     ThreadID threadNumber = 0;
 
@@ -328,6 +348,9 @@ class DynInst : public ExecContext, public RefCounted
 
     /** How many source registers are ready. */
     uint8_t readyRegs = 0;
+
+    // How many source regs are waiting
+    uint8_t waitRegs = 0;
 
   public:
     /////////////////////// Load Store Data //////////////////////
@@ -353,6 +376,14 @@ class DynInst : public ExecContext, public RefCounted
     /** Store queue index. */
     ssize_t sqIdx = -1;
     typename LSQUnit::SQIterator sqIt;
+
+    unsigned wibIdx = 0;
+
+    /** Bit-vector column this instruction is parked under in the WIB. */
+    int bvaColIdx = -1;
+
+    /** Bit-vector column this load owns because it missed, or -1. */
+    int ownedCol = -1;
 
 
     /////////////////////// TLB Miss //////////////////////
@@ -727,6 +758,14 @@ class DynInst : public ExecContext, public RefCounted
     /** Marks a specific register as ready. */
     void markSrcRegReady(RegIndex src_idx);
 
+    /** Marks a specific source register as waiting on a load miss. */
+    void markSrcRegWaiting(RegIndex src_idx);
+
+    /** Returns the index of the first source renamed to reg that is not
+     *  ready (and, if skip_waiting, not already waiting), or -1 if none.
+     */
+    int unreadySrcIdxOf(PhysRegIdPtr reg, bool skip_waiting) const;
+
     /** Sets this instruction as completed. */
     void setCompleted() { status.set(Completed); }
 
@@ -844,7 +883,21 @@ class DynInst : public ExecContext, public RefCounted
     /** Returns whether pinned registers are renamed */
     bool isPinnedRegsRenamed() const { return status[PinnedRegsRenamed]; }
 
-    /** Sets the destination registers as renamed */
+
+    void setInWIB() { status.set(WibEntry); }
+
+    void clearInWIB() {status.reset(WibEntry); }
+
+    bool isInWIB() const { return status[WibEntry]; }
+
+    void setCanMoveToWIB() {status.set(CanMoveToWIB);}
+
+    void clearCanMoveToWIB() {status.reset(CanMoveToWIB);}
+
+    bool canMoveToWIB() const { return status[CanMoveToWIB]; }
+
+
+    /** Sets the destinatiopop_frontn registers as renamed */
     void
     setPinnedRegsRenamed()
     {

@@ -1595,6 +1595,8 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
     request->sendPacketToCache();
     if (!request->isSent())
         iewStage->blockMemInst(load_inst);
+    else if (request->mainReq()->getAccessDepth() > 0)
+        iewStage->loadMissed(load_inst);
 
     return NoFault;
 }
