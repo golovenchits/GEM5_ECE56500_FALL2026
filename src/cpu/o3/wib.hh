@@ -277,6 +277,13 @@ class WIB
     int allocateLoadCol(const DynInstPtr &load);
     void loadColDone(int col);
     void freeLoadCol(int col);
+
+    /** Parks an instruction under a load-miss bit-vector column. */
+    void parkInst(const DynInstPtr &inst, int col);
+
+    /** Returns whether a column's load has completed. */
+    bool isColDone(int col) const
+    { return colDone[col]; }
 };
 
 } // namespace o3

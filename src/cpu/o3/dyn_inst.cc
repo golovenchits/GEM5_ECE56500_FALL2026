@@ -59,9 +59,11 @@ DynInst::DynInst(const Arrays &arrays, const StaticInstPtr &static_inst,
       _numSrcs(arrays.numSrcs), _numDests(arrays.numDests),
       _flatDestIdx(arrays.flatDestIdx), _destIdx(arrays.destIdx),
       _prevDestIdx(arrays.prevDestIdx), _srcIdx(arrays.srcIdx),
-      _readySrcIdx(arrays.readySrcIdx), macroop(_macroop)
+      _readySrcIdx(arrays.readySrcIdx), _waitingSrcIdx(arrays.waitingSrcIdx),
+      macroop(_macroop)
 {
     std::fill(_readySrcIdx, _readySrcIdx + (numSrcs() + 7) / 8, 0);
+    std::fill(_waitingSrcIdx, _waitingSrcIdx + (numSrcs() + 7) / 8, 0);
 
     status.reset();
 
@@ -164,8 +166,13 @@ DynInst::operator new(size_t count, Arrays &arrays)
     size_t ready_src_idx_size =
         sizeof(*arrays.readySrcIdx) * ((num_srcs + 7) / 8);
 
+    uintptr_t waiting_src_idx =
+        roundUp(ready_src_idx + ready_src_idx_size, alignof(uint8_t));
+    size_t waiting_src_idx_size =
+        sizeof(*arrays.waitingSrcIdx) * ((num_srcs + 7) / 8);
+
     // Figure out how much space we need in total.
-    size_t total_size = ready_src_idx + ready_src_idx_size;
+    size_t total_size = waiting_src_idx + waiting_src_idx_size;
 
     // Actually allocate it.
     uint8_t *buf = (uint8_t *)::operator new(total_size);
@@ -176,6 +183,7 @@ DynInst::operator new(size_t count, Arrays &arrays)
     arrays.prevDestIdx = (PhysRegIdPtr *)(buf + prev_dest_idx);
     arrays.srcIdx = (PhysRegIdPtr *)(buf + src_idx);
     arrays.readySrcIdx = (uint8_t *)(buf + ready_src_idx);
+    arrays.waitingSrcIdx = (uint8_t *)(buf + waiting_src_idx);
 
     // Initialize all the extra components.
     new (arrays.flatDestIdx) RegId[num_dests];
@@ -183,6 +191,7 @@ DynInst::operator new(size_t count, Arrays &arrays)
     new (arrays.prevDestIdx) PhysRegIdPtr[num_dests];
     new (arrays.srcIdx) PhysRegIdPtr[num_srcs];
     new (arrays.readySrcIdx) uint8_t[num_srcs];
+    new (arrays.waitingSrcIdx) uint8_t[(num_srcs + 7) / 8];
 
     return buf;
 }
@@ -205,8 +214,10 @@ DynInst::~DynInst()
     for (int i = 0; i < _numSrcs; i++)
         _srcIdx[i].~PhysRegIdPtr();
 
-    for (int i = 0; i < ((_numSrcs + 7) / 8); i++)
+    for (int i = 0; i < ((_numSrcs + 7) / 8); i++) {
         _readySrcIdx[i].~uint8_t();
+        _waitingSrcIdx[i].~uint8_t();
+    }
 
 #if TRACING_ON
     if (debug::O3PipeView) {
@@ -295,24 +306,58 @@ DynInst::dump(std::string &outstring)
 void
 DynInst::markSrcRegReady()
 {
-    // TODO: this also needs to check wait bits to see if it's pretend ready
-    DPRINTF(IQ, "[sn:%lli] has %d ready out of %d sources. RTI %d)\n",
-            seqNum, readyRegs+1, numSrcRegs(), readyToIssue());
+    DPRINTF(IQ, "[sn:%lli] has %d ready and %d waiting out of %d sources. "
+            "RTI %d)\n", seqNum, readyRegs+1, waitRegs, numSrcRegs(),
+            readyToIssue());
     if (++readyRegs == numSrcRegs()) {
         setCanIssue();
+        clearCanMoveToWIB();
+    } else if (waitRegs > 0 && readyRegs + waitRegs == numSrcRegs()) {
+        // The remaining sources are all waiting on load misses
+        setCanMoveToWIB();
     }
 }
 
 void
 DynInst::markSrcRegReady(RegIndex src_idx)
 {
+    // A waiting source that gets its real value is no longer waiting
+    if (waitingSrcIdx(src_idx)) {
+        waitingSrcIdx(src_idx, false);
+        --waitRegs;
+    }
+
     readySrcIdx(src_idx, true);
     markSrcRegReady();
 }
 
-void DynInst::markSrcRegWaiting(RegIndex src_idx)
+void
+DynInst::markSrcRegWaiting(RegIndex src_idx)
 {
-    
+    assert(!readySrcIdx(src_idx) && !waitingSrcIdx(src_idx));
+
+    waitingSrcIdx(src_idx, true);
+    ++waitRegs;
+
+    DPRINTF(IQ, "[sn:%lli] has %d ready and %d waiting out of %d sources.\n",
+            seqNum, readyRegs, waitRegs, numSrcRegs());
+
+    // Pretend ready: every source is either truly ready or waiting
+    if (readyRegs + waitRegs == numSrcRegs()) {
+        setCanMoveToWIB();
+    }
+}
+
+int
+DynInst::unreadySrcIdxOf(PhysRegIdPtr reg, bool skip_waiting) const
+{
+    for (int i = 0; i < numSrcRegs(); i++) {
+        if (_srcIdx[i] == reg && !readySrcIdx(i) &&
+                !(skip_waiting && waitingSrcIdx(i))) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 

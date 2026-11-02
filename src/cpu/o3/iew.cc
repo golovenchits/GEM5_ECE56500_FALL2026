@@ -564,15 +564,26 @@ IEW::blockMemInst(const DynInstPtr& inst)
     instQueue.blockMemInst(inst);
 }
 
-void IEW::loadMissed(const DynInstPtr& inst){
-    // TODO: allocate bit-vector column here
-    inst->bvaColIdx = wib->allocateLoadCol(inst);
+void
+IEW::loadMissed(const DynInstPtr& inst)
+{
+    // Nothing waits on a squashed load or one without destinations, and a
+    // replayed load that misses again already owns a bit-vector.
+    if (inst->isSquashed() || inst->numDestRegs() == 0 ||
+            inst->ownedCol >= 0) {
+        return;
+    }
 
-    // set wait bit & load idx in IQ
-    instQueue.markRegWait(inst);
+    // allocate bit-vector column here
+    inst->ownedCol = wib->allocateLoadCol(inst);
 
-    // TODO: pretend-wake dependents
-    
+    // Out of bit-vectors: dependents keep waiting in the IQ
+    if (inst->ownedCol < 0) {
+        return;
+    }
+
+    // pretend wake dependents and set their wait bits
+    instQueue.pretendWakeDependents(inst, inst->ownedCol);
 }
 
 void
@@ -1482,7 +1493,11 @@ IEW::tick()
         // Have the instruction queue try to schedule any ready instructions.
         // (In actuality, this scheduling is for instructions that will
         // be executed next cycle.)
-        instQueue.scheduleReadyInsts();
+        int issued = instQueue.scheduleReadyInsts();
+        
+        if (instQueue.movePretendReadyInstsToWIB(issueWidth - issued)) {
+            updatedQueues = true;
+        }
 
         // Also should advance its own time buffers if the stage ran.
         // Not the best place for it, but this works (hopefully).

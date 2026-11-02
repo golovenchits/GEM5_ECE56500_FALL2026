@@ -7,9 +7,10 @@
 #include "cpu/o3/dyn_inst.hh"
 #include "cpu/o3/limits.hh"
 #include "debug/Fetch.hh"
-// #include "debug/WIB.hh"
+#include "debug/WIB.hh"
 #include "params/BaseO3CPU.hh"
 #include "cpu/o3/cpu.hh"
+#include <algorithm>
 
 namespace gem5
 {
@@ -53,18 +54,38 @@ WIB::resetState()
     bitVecArr.assign(maxNumCols, std::vector<bool>(numEntries, false));
 }
 
-int WIB::allocateLoadCol(const DynInstPtr &load){
+int
+WIB::allocateLoadCol(const DynInstPtr &load)
+{
+    // No free bit-vector: the miss is handled without the WIB
     if (freeCols.empty()) {
-        panic("No free columns available in WIB");
-        // TODO: maybe need to stall instead of panicking
+        DPRINTF(WIB, "No free bit-vector for load [sn:%llu].\n",
+                load->seqNum);
+        return -1;
     }
+
     int new_col = freeCols.back();
     freeCols.pop_back();
     colDone[new_col] = false;
 
     bitVecArr[new_col].assign(numEntries, false);
-    // bitVecArr[new_col][load->wibIdx] = true; // Don't need to do this?
     return new_col;
+}
+
+void
+WIB::parkInst(const DynInstPtr &inst, int col)
+{
+    assert(col >= 0 && col < maxNumCols);
+    assert(!colDone[col]);
+    assert(!bitVecArr[col][inst->wibIdx]);
+
+    inst->bvaColIdx = col;
+    inst->setInWIB();
+    bitVecArr[col][inst->wibIdx] = true;
+
+    stats.writes++;
+    DPRINTF(WIB, "Parked [sn:%llu] in slot %u under bit-vector %i.\n",
+            inst->seqNum, inst->wibIdx, col);
 }
 
 std::string
@@ -83,7 +104,7 @@ WIB::countInsts()
     return count;
 }
 
-
+// this runs at DISPATCH, for EVERY instruction, not just ones that enter the WIB
 void
 WIB::insertInst(const DynInstPtr &inst)
 {
@@ -94,7 +115,6 @@ WIB::insertInst(const DynInstPtr &inst)
     inst->wibIdx = allocIdx;
     allocIdx = (allocIdx + 1) % numEntries;
 
-    // Dispatch is in program order, so each bank stays in program order
     instBanks[bank].push_back(inst);
     ++bankEntries[bank];
     ++numInstsInWIB;
@@ -131,5 +151,14 @@ WIB::drainSanityCheck() const
     assert(isEmpty());
 }
 
+WIB::WIBStats::WIBStats(statistics::Group *parent)
+  : statistics::Group(parent, "wib"),
+    ADD_STAT(reads, statistics::units::Count::get(),
+        "The number of WIB reads"),
+    ADD_STAT(writes, statistics::units::Count::get(),
+        "The number of WIB writes")
+{
 }
-}
+
+} // namespace o3
+} // namespace gem5

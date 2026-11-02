@@ -425,6 +425,8 @@ InstructionQueue::resetState()
         queueOnList[i] = false;
         readyIt[i] = listOrder.end();
     }
+    while (!pretendReadyInsts.empty())
+        pretendReadyInsts.pop();
     nonSpecInsts.clear();
     listOrder.clear();
     deferredMemInsts.clear();
@@ -752,7 +754,7 @@ InstructionQueue::processFUCompletion(const DynInstPtr &inst, int fu_idx)
 // @todo: Figure out a better way to remove the squashed items from the
 // lists.  Checking the top item of each list to see if it's squashed
 // wastes time and forces jumps.
-void
+int
 InstructionQueue::scheduleReadyInsts()
 {
     DPRINTF(IQ, "Attempting to schedule ready instructions from "
@@ -920,6 +922,71 @@ InstructionQueue::scheduleReadyInsts()
     } else {
         DPRINTF(IQ, "Not able to schedule any instructions.\n");
     }
+    return total_issued;
+}
+
+int
+InstructionQueue::movePretendReadyInstsToWIB(int movableWidth)
+{
+    WIB *wib = iewStage->wib;
+    std::vector<DynInstPtr> moved;
+
+    while (!pretendReadyInsts.empty() && (int)moved.size() < movableWidth) {
+        DynInstPtr inst = pretendReadyInsts.top();
+        pretendReadyInsts.pop();
+
+        // Skip stale entries: squashed, already issued or moved, or truly
+        // ready since it was queued
+        if (inst->isSquashed() || !inst->isInIQ() || inst->isInWIB() ||
+                !inst->canMoveToWIB()) {
+            continue;
+        }
+
+        // Park under the first source still waiting on an outstanding miss
+        int col = -1;
+        for (int i = 0; i < inst->numSrcRegs(); i++) {
+            RegIndex flat = inst->renamedSrcIdx(i)->flatIndex();
+            if (inst->waitingSrcIdx(i) && regWaitBits[flat] &&
+                    !wib->isColDone(regWaitLoad[flat])) {
+                col = regWaitLoad[flat];
+                break;
+            }
+        }
+
+        // Its miss already returned: it waits in the IQ for the value
+        if (col < 0) {
+            inst->clearCanMoveToWIB();
+            continue;
+        }
+
+        // Take it off the chains of its waiting sources; the rest are ready
+        for (int i = 0; i < inst->numSrcRegs(); i++) {
+            if (inst->waitingSrcIdx(i)) {
+                dependGraph.remove(inst->renamedSrcIdx(i)->flatIndex(), inst);
+            }
+        }
+
+        // Free its IQ entry
+        ThreadID tid = inst->threadNumber;
+        instList[tid].remove(inst);
+        ++freeEntries;
+        count[tid]--;
+        inst->clearInIQ();
+        inst->clearCanMoveToWIB();
+
+        DPRINTF(IQ, "Moving pretend-ready [sn:%llu] PC %s to the WIB under "
+                "bit-vector %i.\n", inst->seqNum, inst->pcState(), col);
+
+        wib->parkInst(inst, col);
+        moved.push_back(inst);
+    }
+
+    // Their dependents see the wait bits from the next cycle on
+    for (auto &inst : moved) {
+        pretendWakeDependents(inst, inst->bvaColIdx);
+    }
+
+    return moved.size();
 }
 
 void
@@ -1021,10 +1088,9 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
         }
 
         // Avoid waking up dependents if the register is pinned
-        dest_reg->decrNumPinnedWritesToComplete();
+        // dest_reg->decrNumPinnedWritesToComplete();
         if (dest_reg->isPinned())
-            completed_inst->setPinnedRegsWritten();
-
+            continue;
         if (dest_reg->getNumPinnedWritesToComplete() != 0) {
             DPRINTF(IQ, "Reg %d [%s] is pinned, skipping\n",
                     dest_reg->index(), dest_reg->className());
@@ -1043,13 +1109,17 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
             DPRINTF(IQ, "Waking up a dependent instruction, [sn:%llu] "
                     "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
 
-            // Might want to give more information to the instruction
-            // so that it knows which of its source registers is
-            // ready.  However that would mean that the dependency
-            // graph entries would need to hold the src_reg_idx.
-            dep_inst->markSrcRegReady();
+            // The dependency graph doesn't hold the src_reg_idx, so look it
+            // up; marking it by index also clears a waiting source.
+            int src_idx = dep_inst->unreadySrcIdxOf(dest_reg, false);
+            if (src_idx >= 0) {
+                dep_inst->markSrcRegReady(src_idx);
+            } else {
+                dep_inst->markSrcRegReady();
+            }
 
             addIfReady(dep_inst);
+            addIfPretendReady(dep_inst);
 
             dep_inst = dependGraph.pop(dest_reg->flatIndex());
 
@@ -1063,6 +1133,10 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
 
         // Mark the scoreboard as having that register ready.
         regScoreboard[dest_reg->flatIndex()] = true;
+
+        // The value is here, so the register no longer waits on a miss.
+        regWaitBits[dest_reg->flatIndex()] = false;
+        regWaitLoad[dest_reg->flatIndex()] = -1;
     }
     return dependents;
 }
@@ -1587,25 +1661,97 @@ InstructionQueue::dumpInsts()
     }
 }
 
-void InstructionQueue::markRegWait(const DynInstPtr &missed_ld){
+void
+InstructionQueue::addIfPretendReady(const DynInstPtr &inst)
+{
+    // Memory instructions are not moved to the WIB; they keep waiting in
+    // the IQ for the real value.
+    if (!inst->canMoveToWIB() || inst->isMemRef()) {
+        return;
+    }
 
-    int8_t total_dest_regs = missed_ld->numDestRegs();
+    DPRINTF(IQ, "Instruction is pretend-ready, putting it onto the "
+            "pretend-ready list, PC %s [sn:%llu].\n",
+            inst->pcState(), inst->seqNum);
+
+    pretendReadyInsts.push(inst);
+}
+
+int
+InstructionQueue::pretendWakeDependents(const DynInstPtr &inst, int col)
+{
+    int dependents = 0;
+
+    DPRINTF(IQ, "Pretend-waking dependents of PC %s [sn:%llu] under "
+            "bit-vector %i.\n", inst->pcState(), inst->seqNum, col);
+
+    assert(!inst->isSquashed());
+    assert(col >= 0);
 
     for (int dest_reg_idx = 0;
-         dest_reg_idx < total_dest_regs;
+         dest_reg_idx < inst->numDestRegs();
          dest_reg_idx++)
     {
-        PhysRegIdPtr dest_reg = missed_ld->renamedDestIdx(dest_reg_idx);
+        PhysRegIdPtr dest_reg = inst->renamedDestIdx(dest_reg_idx);
 
+        // Special case of uniq or control registers.  They are not
+        // handled by the IQ and thus have no dependency graph entry.
         if (dest_reg->isFixedMapping()) {
+            DPRINTF(IQ, "Reg %d [%s] is part of a fix mapping, skipping\n",
+                    dest_reg->index(), dest_reg->className());
             continue;
         }
 
+        // Pinned registers have multiple writers, and only the real wakeup
+        // in wakeDependents() may count their writes, so leave them alone.
+        if (dest_reg->isPinned()) {
+            DPRINTF(IQ, "Reg %d [%s] is pinned, skipping\n",
+                    dest_reg->index(), dest_reg->className());
+            continue;
+        }
+
+        DPRINTF(IQ, "Pretend-waking any dependents on register %i (%s).\n",
+                dest_reg->index(), dest_reg->className());
+
+        // Instructions inserted from now on see the wait bit in
+        // addToDependents().
         regWaitBits[dest_reg->flatIndex()] = true;
-        regWaitLoad[dest_reg->flatIndex()] = missed_ld->bvaColIdx;
+        regWaitLoad[dest_reg->flatIndex()] = col;
+
+        // Mark the source as waiting in every current dependent. They stay
+        // on the register's chain so the real wakeup still reaches them; an
+        // instruction moved to the WIB is removed from the chain then.
+        std::vector<DynInstPtr> waiting;
+        DynInstPtr dep_inst = dependGraph.pop(dest_reg->flatIndex());
+
+        while (dep_inst) {
+            waiting.push_back(dep_inst);
+            dep_inst = dependGraph.pop(dest_reg->flatIndex());
+        }
+
+        // Put them back in their original order
+        for (auto it = waiting.rbegin(); it != waiting.rend(); ++it) {
+            dep_inst = *it;
+
+            DPRINTF(IQ, "Pretend-waking up a dependent instruction, [sn:%llu] "
+                    "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
+
+            int src_idx = dep_inst->unreadySrcIdxOf(dest_reg, true);
+            if (src_idx >= 0) {
+                dep_inst->markSrcRegWaiting(src_idx);
+            }
+
+            addIfPretendReady(dep_inst);
+
+            dependGraph.insert(dest_reg->flatIndex(), dep_inst);
+
+            ++dependents;
+        }
     }
-    
+
+    return dependents;
 }
+
 
 } // namespace o3
 } // namespace gem5
