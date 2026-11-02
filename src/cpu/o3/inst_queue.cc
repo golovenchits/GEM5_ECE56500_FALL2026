@@ -601,6 +601,7 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
         memDepUnit[new_inst->threadNumber].insert(new_inst);
     } else {
         addIfReady(new_inst);
+        addIfPretendReady(new_inst);
     }
 
     ++iqStats.instsAdded;
@@ -1437,6 +1438,9 @@ InstructionQueue::addToDependents(const DynInstPtr &new_inst)
                         src_reg->className());
 
                 dependGraph.insert(src_reg->flatIndex(), new_inst);
+                if(regWaitBits[src_reg->flatIndex()]) {
+                    new_inst->markSrcRegWaiting(src_reg_idx);
+                }
 
                 // Change the return value to indicate that something
                 // was added to the dependency graph.
@@ -1487,6 +1491,9 @@ InstructionQueue::addToProducers(const DynInstPtr &new_inst)
 
         // Mark the scoreboard to say it's not yet ready.
         regScoreboard[dest_reg->flatIndex()] = false;
+
+        regWaitBits[dest_reg->flatIndex()] = false;
+        regWaitLoad[dest_reg->flatIndex()] = -1;
     }
 }
 
