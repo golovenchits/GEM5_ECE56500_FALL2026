@@ -54,6 +54,15 @@ WIB::resetState()
     bitVecArr.assign(maxNumCols, std::vector<bool>(numEntries, false));
 }
 
+void
+WIB::markColDone(int col)
+{
+    colDone[col] = true;
+}
+
+// void
+// WIB::findReinsertion
+
 int
 WIB::allocateLoadCol(const DynInstPtr &load)
 {

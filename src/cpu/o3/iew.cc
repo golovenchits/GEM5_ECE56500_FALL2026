@@ -1434,6 +1434,9 @@ IEW::writebackInsts()
         // when it's ready to execute the strictly ordered load.
         if (!inst->isSquashed() && inst->isExecuted() &&
                 inst->getFault() == NoFault) {
+            if (inst->ownedCol >= 0) { // only -1 if is missed load
+                wib->markColDone(inst->ownedCol);
+            }
             int dependents = instQueue.wakeDependents(inst);
 
             for (int i = 0; i < inst->numDestRegs(); i++) {

@@ -176,11 +176,16 @@ class WIB
      *  double checking that variable.
      */
     int countInsts();
-
+    
     /** Debugging function to count the instructions in a specific bank. Use
      *  bankEntries unless you are double checking that variable.
      */
     size_t countInsts(unsigned bank);
+
+    /** Marks the bit-vector array column as done for when the 
+     *  load-miss returns
+     */
+    void markColDone(int col);
 
   private:
     /** Reset the WIB state */
