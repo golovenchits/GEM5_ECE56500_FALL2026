@@ -246,7 +246,7 @@ class WIB
 
   public:
     /** Number of instructions in the WIB. */
-    int numInstsInWIB;
+    unsigned int numInstsInWIB;
 
     /** Dummy instruction returned if there are no insts left. */
     DynInstPtr dummyInst;
@@ -274,21 +274,25 @@ class WIB
 
     int maxNumCols;
 
+    enum class ColState {Free, Waiting, Done};
+
     std::vector<std::vector<bool>> bitVecArr;
-    std::vector<int> freeCols;
-    std::vector<bool> colDone;
+    // std::vector<int> freeCols;
+    // std::vector<bool> colDone;
+    std::vector<ColState> colState;
+    std::vector<InstSeqNum> colOwnerSeqNum;
 
   public:
     int allocateLoadCol(const DynInstPtr &load);
-    void loadColDone(int col);
-    void freeLoadCol(int col);
+    // void loadColDone(int col);
+    void markColFree(int col);
 
     /** Parks an instruction under a load-miss bit-vector column. */
     void parkInst(const DynInstPtr &inst, int col);
 
     /** Returns whether a column's load has completed. */
     bool isColDone(int col) const
-    { return colDone[col]; }
+    { return colState[col] == ColState::Done; }
 };
 
 } // namespace o3

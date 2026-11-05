@@ -428,6 +428,7 @@ IEW::squash(ThreadID tid)
 
     // Tell the IQ to start squashing.
     instQueue.squash(tid);
+    wib->squash(fromCommit->commitInfo[tid].doneSeqNum);
 
     // Tell the LDSTQ to start squashing.
     ldstQueue.squash(fromCommit->commitInfo[tid].doneSeqNum, tid);
@@ -1434,7 +1435,7 @@ IEW::writebackInsts()
         // when it's ready to execute the strictly ordered load.
         if (!inst->isSquashed() && inst->isExecuted() &&
                 inst->getFault() == NoFault) {
-            if (inst->ownedCol >= 0) { // only -1 if is missed load
+            if (inst->ownedCol >= 0) { // not -1 if load missed
                 wib->markColDone(inst->ownedCol);
             }
             int dependents = instQueue.wakeDependents(inst);

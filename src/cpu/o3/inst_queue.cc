@@ -1738,6 +1738,11 @@ InstructionQueue::pretendWakeDependents(const DynInstPtr &inst, int col)
                 int src_idx = dep_inst->unreadySrcIdxOf(dest_reg, true);
                 if (src_idx >= 0) {
                     dep_inst->markSrcRegWaiting(src_idx);
+                } else if (dep_inst->isPretendReady()) {
+                    // Already waiting on this register, which now waits on
+                    // a new bit-vector. movePretendReadyInstsToWIB() may
+                    // have cleared the flag while the old one was done.
+                    dep_inst->setCanMoveToWIB();
                 }
 
                 // Only queues it; nothing changes the chain being walked

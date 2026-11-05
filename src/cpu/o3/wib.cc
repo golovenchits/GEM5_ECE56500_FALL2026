@@ -22,13 +22,13 @@ WIB::WIB(CPU *_cpu, const BaseO3CPUParams &params)
 
     : cpu(_cpu),
       numEntries(params.numROBEntries),
+      squashWidth(params.squashWidth),
       wibToIQWidth(params.wibToIQWidth),
       numBanks(2 * params.wibToIQWidth),
-      squashWidth(params.squashWidth),
       maxBankEntries(numEntries/numBanks),
       numInstsInWIB(0),
-      maxNumCols(std::min(params.numWIBBitVectors, params.LQEntries)),
-      stats(_cpu)
+      stats(_cpu),
+      maxNumCols(std::min(params.numWIBBitVectors, params.LQEntries))
 {
     resetState();
 }
@@ -47,17 +47,16 @@ WIB::resetState()
     bankEntries.assign(numBanks, 0);
 
     // Reset BVA
-    freeCols.clear();
-    for (int col = maxNumCols - 1; col >= 0; col--)
-        freeCols.push_back(col);
-    colDone.assign(maxNumCols, false);
+    colState.assign(maxNumCols, ColState::Free);
+    colOwnerSeqNum.assign(maxNumCols, 0);
     bitVecArr.assign(maxNumCols, std::vector<bool>(numEntries, false));
 }
 
 void
 WIB::markColDone(int col)
 {
-    colDone[col] = true;
+    assert(colState[col] == ColState::Waiting);
+    colState[col] = ColState::Done;
 }
 
 // void
@@ -66,26 +65,26 @@ WIB::markColDone(int col)
 int
 WIB::allocateLoadCol(const DynInstPtr &load)
 {
-    // No free bit-vector: the miss is handled without the WIB
-    if (freeCols.empty()) {
-        DPRINTF(WIB, "No free bit-vector for load [sn:%llu].\n",
-                load->seqNum);
-        return -1;
+    for (int col = 0; col < maxNumCols; col++){
+        if (colState[col] == ColState::Free) {
+            colState[col] = ColState::Waiting;
+            colOwnerSeqNum[col] = load->seqNum;
+            bitVecArr[col].assign(numEntries, false);
+            return col;
+
+        }
     }
+    DPRINTF(WIB, "No free bit-vector for load [sn:%llu].\n",
+                 load->seqNum);
 
-    int new_col = freeCols.back();
-    freeCols.pop_back();
-    colDone[new_col] = false;
-
-    bitVecArr[new_col].assign(numEntries, false);
-    return new_col;
+    return -1;
 }
 
 void
 WIB::parkInst(const DynInstPtr &inst, int col)
 {
     assert(col >= 0 && col < maxNumCols);
-    assert(!colDone[col]);
+    assert(colState[col] == ColState::Waiting);
     assert(!bitVecArr[col][inst->wibIdx]);
 
     inst->bvaColIdx = col;
@@ -146,6 +145,45 @@ void WIB::retireHead(unsigned wib_idx){
     instBanks[bank].pop_front();
     --bankEntries[bank];
     --numInstsInWIB;
+}
+
+void
+WIB::squash(InstSeqNum squash_num)
+{
+
+    DPRINTF(WIB, "Starting to squash within the WIB.\n");
+
+    // wibStatus = WIBSquashing;
+    // doneSquashing = false;
+
+    for (unsigned bank = 0; bank < numBanks; bank++){
+        for (auto it = instBanks[bank].rbegin();
+                it != instBanks[bank].rend() && (*it)->seqNum > squash_num;
+                ++it){
+                const DynInstPtr &inst = *it;
+                if(inst->isInWIB()){
+                    inst->clearInWIB();
+                    bitVecArr[inst->bvaColIdx][inst->wibIdx] = false;
+                    inst->bvaColIdx = -1;
+                }
+        }
+    }
+
+    for (int col = 0; col < maxNumCols; col++){
+        if(colState[col] != ColState::Free && colOwnerSeqNum[col] > squash_num)
+            markColFree(col);
+    }
+}
+
+void
+WIB::markColFree(int col)
+{
+    assert(colState[col] != ColState::Free);
+    assert(std::none_of(bitVecArr[col].begin(), 
+                        bitVecArr[col].end(),
+                        [](bool v){return v;}));
+    
+    colState[col] = ColState::Free;
 }
 
 void

@@ -766,6 +766,15 @@ class DynInst : public ExecContext, public RefCounted
      */
     int unreadySrcIdxOf(PhysRegIdPtr reg, bool skip_waiting) const;
 
+    /** Returns whether every source is either ready or waiting on a load
+     *  miss, with at least one waiting.
+     */
+    bool
+    isPretendReady() const
+    {
+        return waitRegs > 0 && readyRegs + waitRegs == numSrcRegs();
+    }
+
     /** Sets this instruction as completed. */
     void setCompleted() { status.set(Completed); }
 
