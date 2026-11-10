@@ -381,6 +381,17 @@ class LSQ
             return req();
         }
 
+        
+        bool
+        missedInCache() const
+        {
+            for (const auto &r : _reqs) {
+                if (r && r->getAccessDepth() > 0)
+                    return true;
+            }
+            return false;
+        }
+
         /**
          * Test if there is any in-flight translation or mem access request
          */
