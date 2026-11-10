@@ -1529,9 +1529,10 @@ IEW::tick()
         // Have the instruction queue try to schedule any ready instructions.
         // (In actuality, this scheduling is for instructions that will
         // be executed next cycle.)
-        int issued = instQueue.scheduleReadyInsts();
-        
-        if (instQueue.movePretendReadyInstsToWIB(issueWidth - issued)) {
+        instQueue.scheduleReadyInsts();
+
+        // Moves to the WIB free IQ entries
+        if (instQueue.numMovedToWIB()) {
             updatedQueues = true;
         }
 

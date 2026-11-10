@@ -228,15 +228,15 @@ class InstructionQueue
 
     /**
      * Schedules ready instructions, adding the ready ones (oldest first) to
-     * the queue to execute.
+     * the queue to execute. Pretend-ready instructions compete for the same
+     * issue slots by age; when selected they move to the WIB instead.
      */
     int scheduleReadyInsts();
 
-    /** Moves up to movableWidth pretend-ready instructions (oldest first)
-     *  from the IQ to the WIB, freeing their IQ entries.
-     *  @return The number of instructions moved.
+    /** Returns how many instructions the last scheduleReadyInsts() moved
+     *  to the WIB.
      */
-    int movePretendReadyInstsToWIB(int movableWidth);
+    int numMovedToWIB() const { return movedToWIBThisCycle; }
 
     /** Schedules a single specific non-speculative instruction. */
     void scheduleNonSpec(const InstSeqNum &inst);
@@ -503,6 +503,20 @@ class InstructionQueue
      *  sources are ready or waiting on a load miss.
      */
     void addIfPretendReady(const DynInstPtr &inst);
+
+    /** Drops stale entries from the top of pretendReadyInsts and returns
+     *  the oldest instruction that can move to the WIB, or nullptr.
+     *  @param col Set to the bit-vector it would be parked under.
+     */
+    DynInstPtr oldestPretendReady(int &col);
+
+    /** Moves the instruction at the top of pretendReadyInsts to the WIB
+     *  under bit-vector col, freeing its IQ entry.
+     */
+    void moveToWIB(const DynInstPtr &inst, int col);
+
+    /** Instructions moved to the WIB by the last scheduleReadyInsts(). */
+    int movedToWIBThisCycle = 0;
 
     /** Debugging function to count how many entries are in the IQ.  It does
      *  a linear walk through the instructions, so do not call this function

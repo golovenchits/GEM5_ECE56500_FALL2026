@@ -835,7 +835,25 @@ InstructionQueue::scheduleReadyInsts()
     ListOrderIt order_it = listOrder.begin();
     ListOrderIt order_end_it = listOrder.end();
 
-    while (total_issued < totalWidth && order_it != order_end_it) {
+    // Pretend-ready instructions take issue slots like ready ones, in age
+    // order, but go to the WIB instead of a functional unit
+    std::vector<DynInstPtr> moved_to_wib;
+
+    while (total_issued + (int)moved_to_wib.size() < totalWidth) {
+        int col = -1;
+        DynInstPtr pretend_inst = oldestPretendReady(col);
+
+        if (order_it == order_end_it && !pretend_inst) {
+            break;
+        }
+
+        if (pretend_inst && (order_it == order_end_it ||
+                pretend_inst->seqNum < (*order_it).oldestInst)) {
+            moveToWIB(pretend_inst, col);
+            moved_to_wib.push_back(pretend_inst);
+            continue;
+        }
+
         OpClass op_class = (*order_it).queueType;
 
         assert(!readyInsts[op_class].empty());
@@ -961,6 +979,12 @@ InstructionQueue::scheduleReadyInsts()
         }
     }
 
+    // Their dependents see the wait bits from the next cycle on
+    for (auto &inst : moved_to_wib) {
+        pretendWakeDependents(inst, inst->bvaColIdx);
+    }
+    movedToWIBThisCycle = moved_to_wib.size();
+
     iqStats.numIssuedDist.sample(total_issued);
     iqStats.instsIssued+= total_issued;
 
@@ -968,7 +992,8 @@ InstructionQueue::scheduleReadyInsts()
     // @todo If the way deferred memory instructions are handeled due to
     // translation changes then the deferredMemInsts condition should be
     // removed from the code below.
-    if (total_issued || !retryMemInsts.empty() || !deferredMemInsts.empty()) {
+    if (total_issued || movedToWIBThisCycle || !retryMemInsts.empty() ||
+            !deferredMemInsts.empty()) {
         cpu->activityThisCycle();
     } else {
         DPRINTF(IQ, "Not able to schedule any instructions.\n");
@@ -976,25 +1001,24 @@ InstructionQueue::scheduleReadyInsts()
     return total_issued;
 }
 
-int
-InstructionQueue::movePretendReadyInstsToWIB(int movableWidth)
+DynInstPtr
+InstructionQueue::oldestPretendReady(int &col)
 {
     WIB *wib = iewStage->wib;
-    std::vector<DynInstPtr> moved;
 
-    while (!pretendReadyInsts.empty() && (int)moved.size() < movableWidth) {
+    while (!pretendReadyInsts.empty()) {
         DynInstPtr inst = pretendReadyInsts.top();
-        pretendReadyInsts.pop();
 
         // Skip stale entries: squashed, already issued or moved, or truly
         // ready since it was queued
         if (inst->isSquashed() || !inst->isInIQ() || inst->isInWIB() ||
                 !inst->canMoveToWIB()) {
+            pretendReadyInsts.pop();
             continue;
         }
 
         // Park under the first source still waiting on an outstanding miss
-        int col = -1;
+        col = -1;
         for (int i = 0; i < inst->numSrcRegs(); i++) {
             RegIndex flat = inst->renamedSrcIdx(i)->flatIndex();
             if (inst->waitingSrcIdx(i) && regWaitBits[flat] &&
@@ -1007,38 +1031,42 @@ InstructionQueue::movePretendReadyInstsToWIB(int movableWidth)
         // Its miss already returned: it waits in the IQ for the value
         if (col < 0) {
             inst->clearCanMoveToWIB();
+            pretendReadyInsts.pop();
             continue;
         }
 
-        // Take the instruction off the chains of its waiting sources; the rest are ready
-        // This is to say that the instruction is no longer waiting on those sources
-        for (int i = 0; i < inst->numSrcRegs(); i++) {
-            if (inst->waitingSrcIdx(i)) {
-                dependGraph.remove(inst->renamedSrcIdx(i)->flatIndex(), inst);
-            }
+        return inst;
+    }
+
+    return nullptr;
+}
+
+void
+InstructionQueue::moveToWIB(const DynInstPtr &inst, int col)
+{
+    assert(!pretendReadyInsts.empty() && pretendReadyInsts.top() == inst);
+    pretendReadyInsts.pop();
+
+    // Take the instruction off the chains of its waiting sources; the rest are ready
+    // This is to say that the instruction is no longer waiting on those sources
+    for (int i = 0; i < inst->numSrcRegs(); i++) {
+        if (inst->waitingSrcIdx(i)) {
+            dependGraph.remove(inst->renamedSrcIdx(i)->flatIndex(), inst);
         }
-
-        // Free its IQ entry
-        ThreadID tid = inst->threadNumber;
-        instList[tid].remove(inst);
-        ++freeEntries;
-        count[tid]--;
-        inst->clearInIQ();
-        inst->clearCanMoveToWIB();
-
-        DPRINTF(IQ, "Moving pretend-ready [sn:%llu] PC %s to the WIB under "
-                "bit-vector %i.\n", inst->seqNum, inst->pcState(), col);
-
-        wib->parkInst(inst, col);
-        moved.push_back(inst);
     }
 
-    // Their dependents see the wait bits from the next cycle on
-    for (auto &inst : moved) {
-        pretendWakeDependents(inst, inst->bvaColIdx);
-    }
+    // Free its IQ entry
+    ThreadID tid = inst->threadNumber;
+    instList[tid].remove(inst);
+    ++freeEntries;
+    count[tid]--;
+    inst->clearInIQ();
+    inst->clearCanMoveToWIB();
 
-    return moved.size();
+    DPRINTF(IQ, "Moving pretend-ready [sn:%llu] PC %s to the WIB under "
+            "bit-vector %i.\n", inst->seqNum, inst->pcState(), col);
+
+    iewStage->wib->parkInst(inst, col);
 }
 
 void
@@ -1791,7 +1819,7 @@ InstructionQueue::pretendWakeDependents(const DynInstPtr &inst, int col)
                     dep_inst->markSrcRegWaiting(src_idx);
                 } else if (dep_inst->isPretendReady()) {
                     // Already waiting on this register, which now waits on
-                    // a new bit-vector. movePretendReadyInstsToWIB() may
+                    // a new bit-vector. oldestPretendReady() may
                     // have cleared the flag while the old one was done.
                     dep_inst->setCanMoveToWIB();
                 }
