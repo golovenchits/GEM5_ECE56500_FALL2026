@@ -612,6 +612,56 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
 }
 
 void
+InstructionQueue::reinsert(const DynInstPtr &inst)
+{
+    assert(inst);
+    assert(!inst->isInIQ() && !inst->isInWIB());
+    // Memory instructions are never moved to the WIB
+    assert(!inst->isMemRef());
+    assert(freeEntries != 0);
+
+    ThreadID tid = inst->threadNumber;
+
+    DPRINTF(IQ, "Reinserting instruction [sn:%llu] PC %s from the WIB.\n",
+            inst->seqNum, inst->pcState());
+
+    // Keep instList in program order; squashing walks it from the tail
+    auto it = instList[tid].end();
+    while (it != instList[tid].begin() &&
+            (*std::prev(it))->seqNum > inst->seqNum) {
+        --it;
+    }
+    instList[tid].insert(it, inst);
+
+    --freeEntries;
+    count[tid]++;
+    inst->setInIQ();
+
+    // Its results no longer wait on a miss through this instruction. If it
+    // is parked again, pretendWakeDependents() marks them under the new
+    // bit-vector.
+    for (int i = 0; i < inst->numDestRegs(); i++) {
+        PhysRegIdPtr dest_reg = inst->renamedDestIdx(i);
+        if (dest_reg->isFixedMapping())
+            continue;
+        regWaitBits[dest_reg->flatIndex()] = false;
+        regLoadBvaIdx[dest_reg->flatIndex()] = -1;
+    }
+
+    // Re-check the sources that were waiting: those whose value is here are
+    // marked ready, the rest go back on their chains (and are marked waiting
+    // again if their producer still waits on a miss). addToProducers() is
+    // skipped since this instruction is still the registered producer.
+    inst->clearSrcRegsWaiting();
+    addToDependents(inst);
+
+    addIfReady(inst);
+    addIfPretendReady(inst);
+
+    assert(freeEntries == (numEntries - countInsts()));
+}
+
+void
 InstructionQueue::insertNonSpec(const DynInstPtr &new_inst)
 {
     // @todo: Clean up this code; can do it by setting inst as unable

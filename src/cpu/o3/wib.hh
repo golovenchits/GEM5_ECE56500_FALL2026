@@ -1,6 +1,7 @@
 #ifndef __CPU_O3_WIB_HH__
 #define __CPU_O3_WIB_HH__
 
+#include <deque>
 #include <list>
 #include <string>
 #include <utility>
@@ -187,7 +188,33 @@ class WIB
      */
     void markColDone(int col);
 
-    std::list<DynInstPtr> WIB::getReinsertInsts(bool isOdd, int numAvailIQEntries);
+    /** Picks at most one instruction per bank in the even or odd set: the
+     *  oldest one whose bit is set in a completed load's bit-vector. Bits
+     *  stay set until finishReinsert().
+     *  @param isOdd             Read the odd (true) or even (false) banks.
+     *  @param numAvailIQEntries Maximum number of instructions to pick.
+     */
+    std::list<DynInstPtr> getReinsertInsts(bool isOdd, int numAvailIQEntries);
+
+    /** Completes the reinsertion of a picked instruction: clears its bit,
+     *  takes it out of the WIB and frees its column if now empty.
+     */
+    void finishReinsert(const DynInstPtr &inst);
+
+    /** Pick stage. If the latch is empty, picks from this cycle's bank set
+     *  into it; the instructions are delivered to the IQ next cycle. Then
+     *  switches to the other bank set.
+     */
+    void pickReinsertInsts(int numAvailIQEntries);
+
+    /** Returns whether no picked instruction is waiting for delivery. */
+    bool reinsertLatchEmpty() const { return reinsertLatch.empty(); }
+
+    /** Removes and returns the oldest picked instruction. */
+    DynInstPtr popReinsertLatch();
+
+    /** Returns whether a completed load still has parked instructions. */
+    bool hasPendingReinsert() const;
 
   private:
     /** Reset the WIB state */
@@ -222,12 +249,20 @@ class WIB
     /** Whether the odd (true) or even (false) banks are read this cycle. */
     bool readOddBanks;
 
-    /** Bank indices ordered from highest to lowest reinsertion priority. */
-    std::list<unsigned> bankPriority;
-
     // check if all dependent instructions of load is reinserted and can free
     // the bit vector column
     void freeBVAColIfReady();
+
+    /** Returns the oldest instruction in a bank whose bit is set in
+     *  or_bit_vec, or nullptr if there is none.
+     */
+    DynInstPtr oldestReinsertable(unsigned bank,
+                                  const std::vector<bool> &or_bit_vec) const;
+
+    /** Instructions picked last cycle, delivered to the IQ this cycle. Their
+     *  bits stay set until delivery so their columns cannot be freed.
+     */
+    std::deque<DynInstPtr> reinsertLatch;
 
   public:
     /** Per-bank iterator pointing to the last instruction in that bank.

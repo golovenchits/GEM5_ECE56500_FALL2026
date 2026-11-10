@@ -11,6 +11,7 @@
 #include "params/BaseO3CPU.hh"
 #include "cpu/o3/cpu.hh"
 #include <algorithm>
+#include <numeric>
 
 namespace gem5
 {
@@ -53,57 +54,100 @@ WIB::resetState()
     // orBitVec.assign(numEntries, false);
     // reinsertionInsns.clear();
     bankPriorities.assign(numBanks, 0);
+    readOddBanks = false;
+    reinsertLatch.clear();
 }
 
-// void
-// WIB::markColDone(int col)
-// {
-//     assert(colState[col] == ColState::Waiting);
-//     colState[col] = ColState::Done;
-// }
+void
+WIB::pickReinsertInsts(int numAvailIQEntries)
+{
+    // Back-pressure: wait until last cycle's picks have all been delivered
+    if (reinsertLatch.empty()) {
+        for (const auto &inst :
+                getReinsertInsts(readOddBanks, numAvailIQEntries)) {
+            DPRINTF(WIB, "Picked [sn:%llu] in slot %u for reinsertion.\n",
+                    inst->seqNum, inst->wibIdx);
+            reinsertLatch.push_back(inst);
+        }
+    }
+
+    // Each bank is read every other cycle
+    switchBankSet();
+}
+
+DynInstPtr
+WIB::popReinsertLatch()
+{
+    assert(!reinsertLatch.empty());
+    DynInstPtr inst = reinsertLatch.front();
+    reinsertLatch.pop_front();
+    return inst;
+}
+
+bool
+WIB::hasPendingReinsert() const
+{
+    for (int col = 0; col < maxNumCols; col++) {
+        if (colState[col] == ColState::Done &&
+                std::any_of(bitVecArr[col].begin(), bitVecArr[col].end(),
+                            [](bool v) { return v; })) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void
+WIB::markColDone(int col)
+{
+    assert(colState[col] == ColState::Waiting);
+    colState[col] = ColState::Done;
+}
 
 std::list<DynInstPtr>
-WIB::getReinsertInsts(bool isOdd, int numAvailIQEntries) // 
+WIB::getReinsertInsts(bool isOdd, int numAvailIQEntries)
 {
-    std::vector<bool> orBitVec(numEntries, false); // has ROB entries number of bools
+    // OR of the bit-vectors of every completed load
+    std::vector<bool> orBitVec(numEntries, false);
     std::list<DynInstPtr> reinsertionInsts;
 
     for (int col = 0; col < maxNumCols; col++) {
         if (colState[col] == ColState::Done) {
             for (int entry = 0; entry < numEntries; entry++) {
-                orBitVec[entry] |= bitVecArr[col][entry];
+                if (bitVecArr[col][entry])
+                    orBitVec[entry] = true;
             }
-        };
-    };
+        }
+    }
 
     // Create a vector of bank IDs
-    std::vector<int> bankIdxs (numBanks);
+    std::vector<int> bankIdxs(numBanks);
     std::iota(bankIdxs.begin(), bankIdxs.end(), 0);
 
-    // Sort the indices based on the bank priorities
-    std::sort(bankIdxs.begin(), bankIdxs.end(), [&](int i, int j) {
-        return bankPriorities[i] < bankPriorities[j];
+    // Highest priority (waited longest) first
+    std::stable_sort(bankIdxs.begin(), bankIdxs.end(), [&](int i, int j) {
+        return bankPriorities[i] > bankPriorities[j];
     });
 
-    // for (int bank = isOdd; bank < numBanks; bank += 2) {
-    for (auto bIt = bankIdxs.begin(); bIt < bankIdxs.end(); bIt++) {
-        int bank = *bIt;
-        if (bank % 2 != isOdd) continue;
-        if (bankHasReinsertable(bank) == true) {
-            if (numAvailIQEntries - reinsertionInsts.size() > 0) {
-                DynInstPtr wibBankEntry = instBanks[bankIdxs[i]][idx];
-                if (wibBankEntry->isSquashed()) continue;
-                reinsertionInsts.push_back(wibBankEntry);
-                bankPriorities[bank] = 0;
-                bitVecArr[wibBankEntry->bvaColIdx][wibBankEntry->wibIdx] = false;
-            } else {
-                bankPriorities[bank]++;
-            }
-        } else bankPriorities[bank] = 0;
+    for (int bank : bankIdxs) {
+        if ((bank % 2 == 1) != isOdd)
+            continue;
+
+        DynInstPtr oldest = oldestReinsertable(bank, orBitVec);
+        if (!oldest) {
+            // Nothing to reinsert: lowest priority
+            bankPriorities[bank] = 0;
+        } else if ((int)reinsertionInsts.size() < numAvailIQEntries) {
+            // Reinserted: lowest priority
+            reinsertionInsts.push_back(oldest);
+            bankPriorities[bank] = 0;
+        } else {
+            // Had one but no room: stays at higher priority
+            bankPriorities[bank]++;
+        }
     }
-    
+
     assert(reinsertionInsts.size() <= wibToIQWidth);
-    assert(numAvailIQEntries >= reinsertionInsts.size());
 
     // check if all dependent instructions of a load is reinserted and can free
     // the bit vector column
@@ -112,17 +156,41 @@ WIB::getReinsertInsts(bool isOdd, int numAvailIQEntries) //
     return reinsertionInsts;
 }
 
-bool
-WIB::bankHasReinsertable(int bankIdx) {
-    int slice_start = bank * maxBankEntries;
-    for (int idx = slice_start; idx < slice_start + maxBankEntries; idx++) {
-        if (orBitVec[idx] == true) return true;
+DynInstPtr
+WIB::oldestReinsertable(unsigned bank,
+                        const std::vector<bool> &or_bit_vec) const
+{
+    // Each bank's list is in program order, so the first match is oldest
+    for (const auto &inst : instBanks[bank]) {
+        if (or_bit_vec[inst->wibIdx])
+            return inst;
     }
-    return false;
+    return nullptr;
 }
 
 void
-WIB::freeBVAColIfReady(int col) {
+WIB::finishReinsert(const DynInstPtr &inst)
+{
+    int col = inst->bvaColIdx;
+    assert(inst->isInWIB() && col >= 0 && col < maxNumCols);
+    assert(colState[col] == ColState::Done);
+    assert(bitVecArr[col][inst->wibIdx]);
+
+    bitVecArr[col][inst->wibIdx] = false;
+    inst->clearInWIB();
+    inst->bvaColIdx = -1;
+
+    stats.reads++;
+    DPRINTF(WIB, "Reinserting [sn:%llu] from slot %u, bit-vector %i.\n",
+            inst->seqNum, inst->wibIdx, col);
+
+    // Its column may now be empty
+    freeBVAColIfReady();
+}
+
+void
+WIB::freeBVAColIfReady()
+{
     for (int col = 0; col < maxNumCols; col++) {
         if (std::none_of(bitVecArr[col].begin(), bitVecArr[col].end(), 
                 [](bool v){return v;}) && (colState[col] == ColState::Done)) {
@@ -252,6 +320,14 @@ WIB::squash(InstSeqNum squash_num)
         if(colState[col] != ColState::Free && colOwnerSeqNum[col] > squash_num)
             markColFree(col);
     }
+
+    // Picked but not yet delivered: their bits were cleared above
+    reinsertLatch.erase(
+        std::remove_if(reinsertLatch.begin(), reinsertLatch.end(),
+            [&](const DynInstPtr &inst) {
+                return inst->seqNum > squash_num;
+            }),
+        reinsertLatch.end());
 }
 
 void
@@ -275,6 +351,7 @@ void
 WIB::drainSanityCheck() const
 {
     assert(isEmpty());
+    assert(reinsertLatch.empty());
 }
 
 WIB::WIBStats::WIBStats(statistics::Group *parent)

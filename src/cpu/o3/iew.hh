@@ -188,6 +188,12 @@ class IEW
 
     void loadMissed(const DynInstPtr &inst);
 
+    /** Moves instructions picked from the WIB last cycle into the IQ, then
+     *  picks the next ones. Runs before dispatch, which gets only the
+     *  bandwidth left over.
+     */
+    void reinsertFromWIB();
+
     /** Notifies that the cache has become unblocked */
     void cacheUnblocked();
 
@@ -381,6 +387,11 @@ class IEW
      * so that IEW knows to broadcast the updated amount of free entries.
      */
     bool updatedQueues;
+
+    /** Instructions moved from the WIB to the IQ this cycle; they use up
+     *  dispatch bandwidth.
+     */
+    int reinsertedThisCycle = 0;
 
     /** Commit to IEW delay. */
     Cycles commitToIEWDelay;

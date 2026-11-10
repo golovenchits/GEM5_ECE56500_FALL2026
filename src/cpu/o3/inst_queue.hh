@@ -184,6 +184,12 @@ class InstructionQueue
     /** Inserts a new instruction into the IQ. */
     void insert(const DynInstPtr &new_inst);
 
+    /** Puts an instruction coming back from the WIB into the IQ. Unlike
+     *  insert(), it keeps its existing producer registration and re-checks
+     *  only its sources.
+     */
+    void reinsert(const DynInstPtr &inst);
+
     /** Inserts a new, non-speculative instruction into the IQ. */
     void insertNonSpec(const DynInstPtr &new_inst);
 

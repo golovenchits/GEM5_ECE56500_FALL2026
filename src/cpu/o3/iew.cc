@@ -588,6 +588,35 @@ IEW::loadMissed(const DynInstPtr& inst)
 }
 
 void
+IEW::reinsertFromWIB()
+{
+    reinsertedThisCycle = 0;
+
+    // Deliver: instructions picked last cycle enter the IQ now
+    while (!wib->reinsertLatchEmpty() &&
+            reinsertedThisCycle < (int)dispatchWidth &&
+            !instQueue.isFull()) {
+        DynInstPtr inst = wib->popReinsertLatch();
+        wib->finishReinsert(inst);
+        instQueue.reinsert(inst);
+        ++reinsertedThisCycle;
+    }
+
+    // Pick: read this cycle's bank set; delivered next cycle
+    wib->pickReinsertInsts(instQueue.numFreeEntries());
+
+    if (reinsertedThisCycle > 0) {
+        updatedQueues = true;
+    }
+
+    // Keep the CPU ticking while the WIB still has work to do
+    if (reinsertedThisCycle > 0 || !wib->reinsertLatchEmpty() ||
+            wib->hasPendingReinsert()) {
+        activityThisCycle();
+    }
+}
+
+void
 IEW::cacheUnblocked()
 {
     instQueue.cacheUnblocked();
@@ -921,7 +950,7 @@ IEW::dispatchInsts(ThreadID tid)
     // Loop through the instructions, putting them in the instruction
     // queue.
     for ( ; dis_num_inst < insts_to_add &&
-              dis_num_inst < dispatchWidth;
+              dis_num_inst < (int)dispatchWidth - reinsertedThisCycle;
           ++dis_num_inst)
     {
         inst = insts_to_dispatch.front();
@@ -1475,6 +1504,9 @@ IEW::tick()
 
     // Free function units marked as being freed this cycle.
     fuPool->processFreeUnits();
+
+    // WIB reinsertion takes IQ bandwidth before dispatch does
+    reinsertFromWIB();
 
     std::list<ThreadID>::iterator threads = activeThreads->begin();
     std::list<ThreadID>::iterator end = activeThreads->end();

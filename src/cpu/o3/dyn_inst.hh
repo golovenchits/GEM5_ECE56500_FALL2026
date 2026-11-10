@@ -775,6 +775,18 @@ class DynInst : public ExecContext, public RefCounted
         return waitRegs > 0 && readyRegs + waitRegs == numSrcRegs();
     }
 
+    /** Drops every waiting mark so the sources can be re-evaluated when the
+     *  instruction is reinserted into the IQ from the WIB.
+     */
+    void
+    clearSrcRegsWaiting()
+    {
+        for (int i = 0; i < numSrcRegs(); i++)
+            waitingSrcIdx(i, false);
+        waitRegs = 0;
+        clearCanMoveToWIB();
+    }
+
     /** Sets this instruction as completed. */
     void setCompleted() { status.set(Completed); }
 
