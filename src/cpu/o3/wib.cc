@@ -50,17 +50,96 @@ WIB::resetState()
     colState.assign(maxNumCols, ColState::Free);
     colOwnerSeqNum.assign(maxNumCols, 0);
     bitVecArr.assign(maxNumCols, std::vector<bool>(numEntries, false));
-}
-
-void
-WIB::markColDone(int col)
-{
-    assert(colState[col] == ColState::Waiting);
-    colState[col] = ColState::Done;
+    // orBitVec.assign(numEntries, false);
+    // reinsertionInsns.clear();
+    bankPriorities.assign(numBanks, 0);
 }
 
 // void
-// WIB::findReinsertion
+// WIB::markColDone(int col)
+// {
+//     assert(colState[col] == ColState::Waiting);
+//     colState[col] = ColState::Done;
+// }
+
+std::list<DynInstPtr>
+WIB::getReinsertInsts(bool isOdd, int numAvailIQEntries) // 
+{
+    std::vector<bool> orBitVec(numEntries, false); // has ROB entries number of bools
+    std::list<DynInstPtr> reinsertionInsts;
+
+    for (int col = 0; col < maxNumCols; col++) {
+        if (colState[col] == ColState::Done) {
+            for (int entry = 0; entry < numEntries; entry++) {
+                orBitVec[entry] |= bitVecArr[col][entry];
+            }
+        };
+    };
+
+    // Create a vector of bank IDs
+    std::vector<int> bankIdxs (numBanks);
+    std::iota(bankIdxs.begin(), bankIdxs.end(), 0);
+
+    // Sort the indices based on the bank priorities
+    std::sort(bankIdxs.begin(), bankIdxs.end(), [&](int i, int j) {
+        return bankPriorities[i] < bankPriorities[j];
+    });
+
+    // for (int bank = isOdd; bank < numBanks; bank += 2) {
+    for (auto bIt = bankIdxs.begin(); bIt < bankIdxs.end(); bIt++) {
+        int bank = *bIt;
+        if (bank % 2 != isOdd) continue;
+        if (bankHasReinsertable(bank) == true) {
+            if (numAvailIQEntries - reinsertionInsts.size() > 0) {
+                DynInstPtr wibBankEntry = instBanks[bankIdxs[i]][idx];
+                if (wibBankEntry->isSquashed()) continue;
+                reinsertionInsts.push_back(wibBankEntry);
+                bankPriorities[bank] = 0;
+                bitVecArr[wibBankEntry->bvaColIdx][wibBankEntry->wibIdx] = false;
+            } else {
+                bankPriorities[bank]++;
+            }
+        } else bankPriorities[bank] = 0;
+    }
+    
+    assert(reinsertionInsts.size() <= wibToIQWidth);
+    assert(numAvailIQEntries >= reinsertionInsts.size());
+
+    // check if all dependent instructions of a load is reinserted and can free
+    // the bit vector column
+    freeBVAColIfReady();
+
+    return reinsertionInsts;
+}
+
+bool
+WIB::bankHasReinsertable(int bankIdx) {
+    int slice_start = bank * maxBankEntries;
+    for (int idx = slice_start; idx < slice_start + maxBankEntries; idx++) {
+        if (orBitVec[idx] == true) return true;
+    }
+    return false;
+}
+
+void
+WIB::freeBVAColIfReady(int col) {
+    for (int col = 0; col < maxNumCols; col++) {
+        if (std::none_of(bitVecArr[col].begin(), bitVecArr[col].end(), 
+                [](bool v){return v;}) && (colState[col] == ColState::Done)) {
+            markColFree(col);
+        }
+    }
+}
+
+// all priorities start at 0.
+// if bank has an instruction to insert, start counting per insertion cycle.
+// sort by highest priority.
+// clear priority to 0 if bank has no instruction to insert or just inserted.
+// need to set colstate to free after all of dependent instructions have been 
+// reinserted
+// above done
+
+// ??? cycles after ???, you reinsert the instruction into the issueQ.
 
 int
 WIB::allocateLoadCol(const DynInstPtr &load)

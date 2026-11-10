@@ -187,6 +187,8 @@ class WIB
      */
     void markColDone(int col);
 
+    std::list<DynInstPtr> WIB::getReinsertInsts(bool isOdd, int numAvailIQEntries);
+
   private:
     /** Reset the WIB state */
     void resetState();
@@ -222,6 +224,10 @@ class WIB
 
     /** Bank indices ordered from highest to lowest reinsertion priority. */
     std::list<unsigned> bankPriority;
+
+    // check if all dependent instructions of load is reinserted and can free
+    // the bit vector column
+    void freeBVAColIfReady();
 
   public:
     /** Per-bank iterator pointing to the last instruction in that bank.
@@ -281,6 +287,7 @@ class WIB
     // std::vector<bool> colDone;
     std::vector<ColState> colState;
     std::vector<InstSeqNum> colOwnerSeqNum;
+    std::vector<int> bankPriorities;
 
   public:
     int allocateLoadCol(const DynInstPtr &load);
