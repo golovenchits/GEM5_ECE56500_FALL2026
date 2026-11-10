@@ -55,6 +55,7 @@ WIB::resetState()
     // reinsertionInsns.clear();
     bankPriorities.assign(numBanks, 0);
     readOddBanks = false;
+    reinsertStartBank = 0;
     reinsertLatch.clear();
 }
 
@@ -120,11 +121,16 @@ WIB::getReinsertInsts(bool isOdd, int numAvailIQEntries)
         }
     }
 
-    // Create a vector of bank IDs
+    // Create a vector of bank IDs, starting from a different bank on every
+    // access so ties between equal priorities rotate
     std::vector<int> bankIdxs(numBanks);
     std::iota(bankIdxs.begin(), bankIdxs.end(), 0);
+    std::rotate(bankIdxs.begin(), bankIdxs.begin() + reinsertStartBank,
+                bankIdxs.end());
+    reinsertStartBank = (reinsertStartBank + 1) % numBanks;
 
-    // Highest priority (waited longest) first
+    // Highest priority (waited longest) first; stable keeps the rotation
+    // order among equal priorities
     std::stable_sort(bankIdxs.begin(), bankIdxs.end(), [&](int i, int j) {
         return bankPriorities[i] > bankPriorities[j];
     });

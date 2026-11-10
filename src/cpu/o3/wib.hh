@@ -324,6 +324,11 @@ class WIB
     std::vector<InstSeqNum> colOwnerSeqNum;
     std::vector<int> bankPriorities;
 
+    /** Bank that goes first among equal priorities; rotates every access
+     *  so no bank is permanently favored (livelock avoidance, sec. 3.3.1).
+     */
+    unsigned reinsertStartBank;
+
   public:
     int allocateLoadCol(const DynInstPtr &load);
     // void loadColDone(int col);
