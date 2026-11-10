@@ -134,40 +134,46 @@ parser.add_argument("-b", "--benchmark", default="",
 
 # Add comprehensive O3CPU configuration arguments based on Table 1
 # Pipeline Width Parameters
-parser.add_argument("--decode-width", type=int, default=8,
-                    help="Decode width for the CPU (default: 8)")
-parser.add_argument("--commit-width", type=int, default=8,
-                    help="Commit width for the CPU (default: 8)")
-parser.add_argument("--fetch-width", type=int, default=8,
-                    help="Fetch width for the CPU (default: 8)")
-parser.add_argument("--issue-width", type=int, default=12,
-                    help="Issue width for the CPU (default: 12)")
-parser.add_argument("--rename-width", type=int, default=8,
-                    help="Rename width for the CPU (default: 8)")
-parser.add_argument("--squash-width", type=int, default=8,
-                    help="Squash width for the CPU (default: 8)")
-parser.add_argument("--dispatch-width", type=int, default=8,
-                    help="Dispatch width for the CPU (default: 8)")
-parser.add_argument("--writeback-width", type=int, default=8,
-                    help="Writeback width for the CPU (default: 8)")
+parser.add_argument("--decode-width", type=int, default=None,
+                    help="Decode width for the CPU (default: BaseO3CPU value)")
+parser.add_argument("--commit-width", type=int, default=None,
+                    help="Commit width for the CPU (default: BaseO3CPU value)")
+parser.add_argument("--fetch-width", type=int, default=None,
+                    help="Fetch width for the CPU (default: BaseO3CPU value)")
+parser.add_argument("--issue-width", type=int, default=None,
+                    help="Issue width for the CPU (default: BaseO3CPU value)")
+parser.add_argument("--rename-width", type=int, default=None,
+                    help="Rename width for the CPU (default: BaseO3CPU value)")
+parser.add_argument("--squash-width", type=int, default=None,
+                    help="Squash width for the CPU (default: BaseO3CPU value)")
+parser.add_argument("--dispatch-width", type=int, default=None,
+                    help="Dispatch width for the CPU (default: BaseO3CPU value)")
+parser.add_argument("--writeback-width", type=int, default=None,
+                    help="Writeback width for the CPU (default: BaseO3CPU value)")
 
 # Queue Size Parameters
-parser.add_argument("--rob-size", type=int, default=128,
-                    help="Reorder Buffer (Active List) size (default: 128)")
-parser.add_argument("--iq-size", type=int, default=32,
-                    help="Integer Issue Queue size (default: 32)")
+parser.add_argument("--rob-size", type=int, default=None,
+                    help="Reorder Buffer (Active List) size (default: BaseO3CPU value)")
+parser.add_argument("--iq-size", type=int, default=None,
+                    help="Integer Issue Queue size (default: BaseO3CPU value)")
 parser.add_argument("--fp-iq-size", type=int, default=32,
                     help="Floating Point Issue Queue size (default: 32)")
-parser.add_argument("--lsq-size", type=int, default=64,
-                    help="Load/Store Queue size (default: 64)")
-parser.add_argument("--fetch-queue-size", type=int, default=8,
-                    help="Instruction Fetch Queue size (default: 8)")
+parser.add_argument("--lsq-size", type=int, default=None,
+                    help="Load/Store Queue size (default: BaseO3CPU value)")
+parser.add_argument("--fetch-queue-size", type=int, default=None,
+                    help="Instruction Fetch Queue size (default: BaseO3CPU value)")
 
 # Register File Parameters
-parser.add_argument("--int-regs", type=int, default=128,
-                    help="Number of integer physical registers (default: 128)")
-parser.add_argument("--fp-regs", type=int, default=128,
-                    help="Number of floating point physical registers (default: 128)")
+parser.add_argument("--int-regs", type=int, default=None,
+                    help="Number of integer physical registers (default: BaseO3CPU value)")
+parser.add_argument("--fp-regs", type=int, default=None,
+                    help="Number of floating point physical registers (default: BaseO3CPU value)")
+
+# WIB Parameters
+parser.add_argument("--wib-to-iq-width", type=int, default=None,
+                    help="WIB to IQ reinsertion width (default: BaseO3CPU value)")
+parser.add_argument("--wib-bit-vectors", type=int, default=None,
+                    help="Number of WIB bit-vectors (default: BaseO3CPU value)")
 
 # Functional Unit Parameters
 parser.add_argument("--int-alus", type=int, default=8,
@@ -197,8 +203,8 @@ parser.add_argument("--disable-prefetch", action='store_true', default=True,
                     help="Disable hardware prefetching by setting all prefetcher types to None (default: True)")
 
 # Store-Wait Table
-parser.add_argument("--store-wait-table-size", type=int, default=2048,
-                    help="Store-Wait Table size (default: 2048)")
+parser.add_argument("--store-wait-table-size", type=int, default=None,
+                    help="Store-Wait Table size (default: BaseO3CPU value)")
 
 # Branch Predictor Parameters  
 parser.add_argument("--enable-bimodal-bp", action='store_true',
@@ -300,60 +306,47 @@ CPUClass.numThreads = numThreads
 
 # Define callback to configure switch CPUs with Table 1 specifications
 def configure_table1_cpu(cpu, cpu_index):
-    """Callback to configure O3CPU switch CPUs with Table 1 specifications"""
-    print(f"Applying Table 1 specifications to switch CPU {cpu_index}...")
-    
-    # Pipeline Width Parameters
-    if hasattr(cpu, 'decodeWidth'):
-        cpu.decodeWidth = args.decode_width
-    if hasattr(cpu, 'commitWidth'):
-        cpu.commitWidth = args.commit_width
-    if hasattr(cpu, 'fetchWidth'):
-        cpu.fetchWidth = args.fetch_width
-    if hasattr(cpu, 'issueWidth'):
-        cpu.issueWidth = args.issue_width
-    if hasattr(cpu, 'renameWidth'):
-        cpu.renameWidth = args.rename_width
-    if hasattr(cpu, 'squashWidth'):
-        cpu.squashWidth = args.squash_width
-    if hasattr(cpu, 'dispatchWidth'):
-        cpu.dispatchWidth = args.dispatch_width
-    if hasattr(cpu, 'wbWidth'):
-        cpu.wbWidth = args.writeback_width
-    
-    # Queue Size Parameters
-    if hasattr(cpu, 'numROBEntries'):
-        cpu.numROBEntries = args.rob_size
-    if hasattr(cpu, 'numIQEntries'):
-        cpu.numIQEntries = args.iq_size
-    if hasattr(cpu, 'LQEntries'):
-        cpu.LQEntries = args.lsq_size
-    if hasattr(cpu, 'SQEntries'):
-        cpu.SQEntries = args.lsq_size
-    if hasattr(cpu, 'fetchQueueSize'):
-        cpu.fetchQueueSize = args.fetch_queue_size
-    
-    # Register File Parameters
-    if hasattr(cpu, 'numPhysIntRegs'):
-        cpu.numPhysIntRegs = args.int_regs
-    if hasattr(cpu, 'numPhysFloatRegs'):
-        cpu.numPhysFloatRegs = args.fp_regs
-    
-    # Store-Wait Table Configuration
-    if hasattr(cpu, 'SSITSize'):
-        cpu.SSITSize = args.store_wait_table_size
-    if hasattr(cpu, 'LFSTSize'):
-        cpu.LFSTSize = args.store_wait_table_size
-    
-    # Functional Unit Configuration
-    if hasattr(cpu, 'fuPool'):
-        cpu.fuPool = Table1FUPool(args.int_alus, args.int_mult_div, args.fp_alus, args.fp_mult_div)
-    
-    print(f"  Configured switch CPU {cpu_index}: issue={cpu.issueWidth}, ROB={cpu.numROBEntries}, IQ={cpu.numIQEntries}")
+    """Configure an O3 CPU. Parameters not given on the command line keep
+    their BaseO3CPU.py defaults."""
+    if not hasattr(cpu, 'decodeWidth'):
+        return  # Not an O3 CPU
 
-# Set the callback for switch CPU configuration when fast-forward is enabled
-if args.ff_instructions > 0:
-    args.custom_cpu_config_callback = configure_table1_cpu
+    # (BaseO3CPU parameter, command-line value)
+    overrides = [
+        ('decodeWidth', args.decode_width),
+        ('commitWidth', args.commit_width),
+        ('fetchWidth', args.fetch_width),
+        ('issueWidth', args.issue_width),
+        ('renameWidth', args.rename_width),
+        ('squashWidth', args.squash_width),
+        ('dispatchWidth', args.dispatch_width),
+        ('wbWidth', args.writeback_width),
+        ('numROBEntries', args.rob_size),
+        ('numIQEntries', args.iq_size),
+        ('LQEntries', args.lsq_size),
+        ('SQEntries', args.lsq_size),
+        ('fetchQueueSize', args.fetch_queue_size),
+        ('numPhysIntRegs', args.int_regs),
+        ('numPhysFloatRegs', args.fp_regs),
+        ('SSITSize', args.store_wait_table_size),
+        ('LFSTSize', args.store_wait_table_size),
+        ('wibToIQWidth', args.wib_to_iq_width),
+        ('numWIBBitVectors', args.wib_bit_vectors),
+    ]
+    for param, value in overrides:
+        if value is not None:
+            setattr(cpu, param, value)
+
+    # Functional Unit Configuration
+    cpu.fuPool = Table1FUPool(args.int_alus, args.int_mult_div, args.fp_alus, args.fp_mult_div)
+
+    print(f"Configured O3 CPU {cpu_index}: issue={cpu.issueWidth}, "
+          f"ROB={cpu.numROBEntries}, IQ={cpu.numIQEntries}, "
+          f"LQ={cpu.LQEntries}, SQ={cpu.SQEntries}, "
+          f"WIB width={cpu.wibToIQWidth}, bit-vectors={cpu.numWIBBitVectors}")
+
+# Configure the O3 CPU switched in after fast-forward or checkpoint restore
+args.custom_cpu_config_callback = configure_table1_cpu
 
 
 
@@ -437,27 +430,8 @@ for i in range(np):
             ObjectList.indirect_bp_list.get(args.indirect_bp_type)
         system.cpu[i].branchPred.indirectBranchPred = indirectBPClass()
 
-    # Configure O3CPU parameters if this is an O3CPU (not during fast-forward)
-    if hasattr(system.cpu[i], 'decodeWidth'):
-        # Apply Table 1 specifications to O3CPU instance
-        system.cpu[i].decodeWidth = args.decode_width
-        system.cpu[i].commitWidth = args.commit_width  
-        system.cpu[i].fetchWidth = args.fetch_width
-        system.cpu[i].issueWidth = args.issue_width
-        system.cpu[i].renameWidth = args.rename_width
-        system.cpu[i].squashWidth = args.squash_width
-        system.cpu[i].dispatchWidth = args.dispatch_width
-        system.cpu[i].wbWidth = args.writeback_width
-        system.cpu[i].numROBEntries = args.rob_size
-        system.cpu[i].numIQEntries = args.iq_size
-        system.cpu[i].LQEntries = args.lsq_size
-        system.cpu[i].SQEntries = args.lsq_size
-        system.cpu[i].fetchQueueSize = args.fetch_queue_size
-        system.cpu[i].numPhysIntRegs = args.int_regs
-        system.cpu[i].numPhysFloatRegs = args.fp_regs
-        system.cpu[i].SSITSize = args.store_wait_table_size
-        system.cpu[i].LFSTSize = args.store_wait_table_size
-        system.cpu[i].fuPool = Table1FUPool(args.int_alus, args.int_mult_div, args.fp_alus, args.fp_mult_div)
+    # Configure the CPU itself when it is an O3 CPU (no fast-forward)
+    configure_table1_cpu(system.cpu[i], i)
 
     system.cpu[i].createThreads()
 

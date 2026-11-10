@@ -140,9 +140,9 @@ class BaseO3CPU(BaseCPU):
 
     numRobs = Param.Unsigned(1, "Number of Reorder Buffers");
 
-    numPhysIntRegs = Param.Unsigned(256,
+    numPhysIntRegs = Param.Unsigned(2048+256,
             "Number of physical integer registers")
-    numPhysFloatRegs = Param.Unsigned(256, "Number of physical floating point "
+    numPhysFloatRegs = Param.Unsigned(2048+256, "Number of physical floating point "
                                       "registers")
     numPhysVecRegs = Param.Unsigned(256, "Number of physical vector "
                                       "registers")
@@ -150,7 +150,7 @@ class BaseO3CPU(BaseCPU):
                                       "registers")
     # most ISAs don't use condition-code regs, so default is 0
     numPhysCCRegs = Param.Unsigned(0, "Number of physical cc registers")
-    numIQEntries = Param.Unsigned(64, "Number of instruction queue entries")
+    numIQEntries = Param.Unsigned(32, "Number of instruction queue entries")
     numROBEntries = Param.Unsigned(2048, "Number of reorder buffer entries")
 
     wibToIQWidth = Param.Unsigned(8, "Width of WIB to IQ")
