@@ -601,8 +601,8 @@ InstructionQueue::insert(const DynInstPtr &new_inst)
         memDepUnit[new_inst->threadNumber].insert(new_inst);
     } else {
         addIfReady(new_inst);
-        addIfPretendReady(new_inst);
     }
+    addIfPretendReady(new_inst);
 
     ++iqStats.instsAdded;
 
@@ -616,8 +616,6 @@ InstructionQueue::reinsert(const DynInstPtr &inst)
 {
     assert(inst);
     assert(!inst->isInIQ() && !inst->isInWIB());
-    // Memory instructions are never moved to the WIB
-    assert(!inst->isMemRef());
     assert(freeEntries != 0);
 
     ThreadID tid = inst->threadNumber;
@@ -1751,9 +1749,13 @@ InstructionQueue::dumpInsts()
 void
 InstructionQueue::addIfPretendReady(const DynInstPtr &inst)
 {
-    // Memory instructions are not moved to the WIB; they keep waiting in
-    // the IQ for the real value.
-    if (!inst->canMoveToWIB() || inst->isMemRef()) {
+    if (!inst->canMoveToWIB()) {
+        return;
+    }
+
+    if (inst->isNonSpeculative() || inst->isStoreConditional() ||
+            inst->isAtomic() || inst->isReadBarrier() ||
+            inst->isWriteBarrier() || inst->isFullMemBarrier()) {
         return;
     }
 
