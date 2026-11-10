@@ -79,6 +79,7 @@ CPU::CPU(const BaseO3CPUParams &params)
                 false, Event::CPU_Exit_Pri),
 #ifndef NDEBUG
       instcount(0),
+      maxInstcount(params.numROBEntries + 1500),
 #endif
       removeInstsThisCycle(false),
       fetch(this, params),

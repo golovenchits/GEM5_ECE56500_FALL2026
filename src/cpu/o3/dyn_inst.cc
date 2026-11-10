@@ -75,12 +75,12 @@ DynInst::DynInst(const Arrays &arrays, const StaticInstPtr &static_inst,
 #ifndef NDEBUG
     ++cpu->instcount;
 
-    if (cpu->instcount > 1500) {
+    if (cpu->instcount > cpu->maxInstcount) {
 #ifdef DEBUG
         cpu->dumpInsts();
         dumpSNList();
 #endif
-        assert(cpu->instcount <= 1500);
+        assert(cpu->instcount <= cpu->maxInstcount);
     }
 
     DPRINTF(DynInst,

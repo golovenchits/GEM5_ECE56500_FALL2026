@@ -203,18 +203,29 @@ class WIB
 
     /** Pick stage. If the latch is empty, picks from this cycle's bank set
      *  into it; the instructions are delivered to the IQ next cycle. Then
-     *  switches to the other bank set.
+     *  switches to the other bank set. Without a free latch or IQ room the
+     *  banks are not accessed and the same set is tried next cycle.
      */
     void pickReinsertInsts(int numAvailIQEntries);
 
     /** Returns whether no picked instruction is waiting for delivery. */
     bool reinsertLatchEmpty() const { return reinsertLatch.empty(); }
 
+    /** Number of picked instructions waiting for delivery; dispatch must
+     *  leave this many IQ entries free for them.
+     */
+    unsigned reinsertLatchSize() const { return reinsertLatch.size(); }
+
     /** Removes and returns the oldest picked instruction. */
     DynInstPtr popReinsertLatch();
 
     /** Returns whether a completed load still has parked instructions. */
     bool hasPendingReinsert() const;
+
+    /** Returns whether any instruction is parked in the WIB. */
+    bool hasParked() const { return numParked > 0; }
+
+    bool rescueHead();
 
   private:
     /** Reset the WIB state */
@@ -263,6 +274,8 @@ class WIB
      *  bits stay set until delivery so their columns cannot be freed.
      */
     std::deque<DynInstPtr> reinsertLatch;
+
+    unsigned numParked = 0;
 
   public:
     /** Per-bank iterator pointing to the last instruction in that bank.

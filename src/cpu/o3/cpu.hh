@@ -377,6 +377,9 @@ class CPU : public BaseCPU
 #ifndef NDEBUG
     /** Count of total number of dynamic instructions in flight. */
     int instcount;
+
+    /** Leak-check limit on instcount; grows with the ROB size. */
+    int maxInstcount;
 #endif
 
     /** List of all the instructions in flight. */

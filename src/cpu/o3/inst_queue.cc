@@ -644,6 +644,8 @@ InstructionQueue::reinsert(const DynInstPtr &inst)
             continue;
         regWaitBits[dest_reg->flatIndex()] = false;
         regLoadBvaIdx[dest_reg->flatIndex()] = -1;
+        // Its producer registration was dropped when it was parked
+        dependGraph.setInst(dest_reg->flatIndex(), inst);
     }
 
     // Re-check the sources that were waiting: those whose value is here are
@@ -1017,16 +1019,22 @@ InstructionQueue::oldestPretendReady(int &col)
 
         // Park under the first source still waiting on an outstanding miss
         col = -1;
+        int done_col = -1;
         for (int i = 0; i < inst->numSrcRegs(); i++) {
             RegIndex flat = inst->renamedSrcIdx(i)->flatIndex();
-            if (inst->waitingSrcIdx(i) && regWaitBits[flat] &&
-                    !wib->isColDone(regLoadBvaIdx[flat])) {
+            if (!inst->waitingSrcIdx(i) || !regWaitBits[flat])
+                continue;
+            if (!wib->isColDone(regLoadBvaIdx[flat])) {
                 col = regLoadBvaIdx[flat];
                 break;
             }
+            if (done_col < 0)
+                done_col = regLoadBvaIdx[flat];
         }
+        if (col < 0)
+            col = done_col;
 
-        // Its miss already returned: it waits in the IQ for the value
+        // Every producer it waits on is back in the IQ: it waits for the value
         if (col < 0) {
             inst->clearCanMoveToWIB();
             pretendReadyInsts.pop();
@@ -1051,6 +1059,16 @@ InstructionQueue::moveToWIB(const DynInstPtr &inst, int col)
         if (inst->waitingSrcIdx(i)) {
             dependGraph.remove(inst->renamedSrcIdx(i)->flatIndex(), inst);
         }
+    }
+
+    // Drop its producer registration while parked. Neither wakeDependents()
+    // nor doSquash() reaches an instruction in the WIB, so if it were
+    // squashed there the head node would keep it alive until the register
+    // is reallocated. reinsert() restores it.
+    for (int i = 0; i < inst->numDestRegs(); i++) {
+        PhysRegIdPtr dest_reg = inst->renamedDestIdx(i);
+        if (!dest_reg->isFixedMapping())
+            dependGraph.clearInst(dest_reg->flatIndex());
     }
 
     // Free its IQ entry
@@ -1336,6 +1354,18 @@ InstructionQueue::squash(ThreadID tid)
 
     // Also tell the memory dependence unit to squash.
     memDepUnit[tid].squash(squashedSeqNum[tid], tid);
+
+    std::vector<DynInstPtr> keep;
+    while (!pretendReadyInsts.empty()) {
+        const DynInstPtr &inst = pretendReadyInsts.top();
+        if (inst->seqNum <= squashedSeqNum[tid] && inst->isInIQ() &&
+                !inst->isInWIB() && inst->canMoveToWIB()) {
+            keep.push_back(inst);
+        }
+        pretendReadyInsts.pop();
+    }
+    for (const auto &inst : keep)
+        pretendReadyInsts.push(inst);
 }
 
 void
@@ -1749,7 +1779,7 @@ InstructionQueue::dumpInsts()
 void
 InstructionQueue::addIfPretendReady(const DynInstPtr &inst)
 {
-    if (!inst->canMoveToWIB()) {
+    if (!inst->canMoveToWIB() || !inst->hasWIBSlot()) {
         return;
     }
 

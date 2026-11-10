@@ -603,7 +603,12 @@ IEW::reinsertFromWIB()
     }
 
     // Pick: read this cycle's bank set; delivered next cycle
-    wib->pickReinsertInsts(instQueue.numFreeEntries());
+    int free_entries = instQueue.numFreeEntries();
+    int head_reserve = wib->hasParked() ? 1 : 0;
+    wib->pickReinsertInsts(free_entries - head_reserve);
+    if (head_reserve && (int)wib->reinsertLatchSize() < free_entries) {
+        wib->rescueHead();
+    }
 
     if (reinsertedThisCycle > 0) {
         updatedQueues = true;
@@ -994,7 +999,9 @@ IEW::dispatchInsts(ThreadID tid)
         }
 
         // Check for full conditions.
-        if (instQueue.isFull(tid)) {
+        if (instQueue.isFull(tid) ||
+                instQueue.numFreeEntries(tid) <= wib->reinsertLatchSize() +
+                (wib->hasParked() ? 1 : 0)) {
             DPRINTF(IEW, "[tid:%i] Issue: IQ has become full.\n", tid);
 
             // Call function to start blocking.

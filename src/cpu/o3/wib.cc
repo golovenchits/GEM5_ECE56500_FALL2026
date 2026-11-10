@@ -57,23 +57,49 @@ WIB::resetState()
     readOddBanks = false;
     reinsertStartBank = 0;
     reinsertLatch.clear();
+    numParked = 0;
 }
 
 void
 WIB::pickReinsertInsts(int numAvailIQEntries)
 {
     // Back-pressure: wait until last cycle's picks have all been delivered
-    if (reinsertLatch.empty()) {
-        for (const auto &inst :
-                getReinsertInsts(readOddBanks, numAvailIQEntries)) {
-            DPRINTF(WIB, "Picked [sn:%llu] in slot %u for reinsertion.\n",
-                    inst->seqNum, inst->wibIdx);
-            reinsertLatch.push_back(inst);
-        }
+    if (!reinsertLatch.empty() || numAvailIQEntries <= 0)
+        return;
+
+    for (const auto &inst :
+            getReinsertInsts(readOddBanks, numAvailIQEntries)) {
+        DPRINTF(WIB, "Picked [sn:%llu] in slot %u for reinsertion.\n",
+                inst->seqNum, inst->wibIdx);
+        reinsertLatch.push_back(inst);
+    }
+    switchBankSet();
+}
+
+bool
+WIB::rescueHead()
+{
+    // The oldest instruction in the WIB, i.e. the ROB head, is at the front
+    // of one of the banks
+    DynInstPtr head;
+    for (const auto &bank : instBanks) {
+        if (!bank.empty() && (!head || bank.front()->seqNum < head->seqNum))
+            head = bank.front();
     }
 
-    // Each bank is read every other cycle
-    switchBankSet();
+    if (!head || !head->isInWIB() ||
+            colState[head->bvaColIdx] != ColState::Done) {
+        return false;
+    }
+    if (std::find(reinsertLatch.begin(), reinsertLatch.end(), head) !=
+            reinsertLatch.end()) {
+        return false;
+    }
+
+    DPRINTF(WIB, "Picked ROB head [sn:%llu] in slot %u for reinsertion "
+            "into the reserved IQ entry.\n", head->seqNum, head->wibIdx);
+    reinsertLatch.push_back(head);
+    return true;
 }
 
 DynInstPtr
@@ -185,6 +211,8 @@ WIB::finishReinsert(const DynInstPtr &inst)
     bitVecArr[col][inst->wibIdx] = false;
     inst->clearInWIB();
     inst->bvaColIdx = -1;
+    assert(numParked > 0);
+    --numParked;
 
     stats.reads++;
     DPRINTF(WIB, "Reinserting [sn:%llu] from slot %u, bit-vector %i.\n",
@@ -237,12 +265,14 @@ void
 WIB::parkInst(const DynInstPtr &inst, int col)
 {
     assert(col >= 0 && col < maxNumCols);
-    assert(colState[col] == ColState::Waiting);
+    assert(inst->hasWIBSlot());
+    assert(colState[col] != ColState::Free);
     assert(!bitVecArr[col][inst->wibIdx]);
 
     inst->bvaColIdx = col;
     inst->setInWIB();
     bitVecArr[col][inst->wibIdx] = true;
+    ++numParked;
 
     stats.writes++;
     DPRINTF(WIB, "Parked [sn:%llu] in slot %u under bit-vector %i.\n",
@@ -318,6 +348,8 @@ WIB::squash(InstSeqNum squash_num)
                     inst->clearInWIB();
                     bitVecArr[inst->bvaColIdx][inst->wibIdx] = false;
                     inst->bvaColIdx = -1;
+                    assert(numParked > 0);
+                    --numParked;
                 }
         }
     }

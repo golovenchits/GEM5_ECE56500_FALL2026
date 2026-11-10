@@ -377,7 +377,13 @@ class DynInst : public ExecContext, public RefCounted
     ssize_t sqIdx = -1;
     typename LSQUnit::SQIterator sqIt;
 
-    unsigned wibIdx = 0;
+    /** Value of wibIdx before the instruction is given a WIB slot. */
+    static constexpr unsigned NoWIBSlot = static_cast<unsigned>(-1);
+
+    unsigned wibIdx = NoWIBSlot;
+
+    /** Returns whether the instruction was given a WIB slot. */
+    bool hasWIBSlot() const { return wibIdx != NoWIBSlot; }
 
     /** Bit-vector column this instruction is parked under in the WIB. */
     int bvaColIdx = -1;
