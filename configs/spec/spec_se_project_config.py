@@ -202,6 +202,15 @@ parser.add_argument("--l2-assoc", type=int, default=4,
 parser.add_argument("--disable-prefetch", action='store_true', default=True,
                     help="Disable hardware prefetching by setting all prefetcher types to None (default: True)")
 
+# MSHR counts: the maximum number of distinct cache lines each cache can have
+# outstanding misses for (defaults from configs/common/Caches.py)
+parser.add_argument("--l1d-mshrs", type=int, default=None,
+                    help="L1 data cache MSHRs (default: 4)")
+parser.add_argument("--l1i-mshrs", type=int, default=None,
+                    help="L1 instruction cache MSHRs (default: 4)")
+parser.add_argument("--l2-mshrs", type=int, default=None,
+                    help="L2 cache MSHRs (default: 20)")
+
 # Store-Wait Table
 parser.add_argument("--store-wait-table-size", type=int, default=None,
                     help="Store-Wait Table size (default: BaseO3CPU value)")
@@ -540,7 +549,20 @@ else:
             system.cpu[i].icache.data_latency = 3
             system.cpu[i].icache.response_latency = 3
             print(f"L1I cache latencies set: tag=3, data=3, response=3 cycles")
-    
+
+    # MSHR overrides. With fast-forward, the switched-in O3 CPU keeps using
+    # these same cache objects, so this covers the measured region too.
+    for i in range(np):
+        if args.l1d_mshrs is not None and hasattr(system.cpu[i], 'dcache'):
+            system.cpu[i].dcache.mshrs = args.l1d_mshrs
+        if args.l1i_mshrs is not None and hasattr(system.cpu[i], 'icache'):
+            system.cpu[i].icache.mshrs = args.l1i_mshrs
+    if args.l2_mshrs is not None and hasattr(system, 'l2'):
+        system.l2.mshrs = args.l2_mshrs
+    if args.l1d_mshrs or args.l1i_mshrs or args.l2_mshrs:
+        print(f"MSHRs: L1D={system.cpu[0].dcache.mshrs} "
+              f"L1I={system.cpu[0].icache.mshrs} L2={system.l2.mshrs}")
+
     # Configure memory latency to 400 CPU cycles per request
     # CPU runs at 2GHz (500ps period), so 400 cycles = 200ns total
     # Memory controller: frontend + backend = 200ns total -> 100ns each

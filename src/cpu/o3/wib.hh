@@ -3,6 +3,7 @@
 
 #include <deque>
 #include <list>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -264,11 +265,10 @@ class WIB
     // the bit vector column
     void freeBVAColIfReady();
 
-    /** Returns the oldest instruction in a bank whose bit is set in
-     *  or_bit_vec, or nullptr if there is none.
+    /** Returns the oldest instruction in a bank whose bit is set in a
+     *  completed load's bit-vector, or nullptr if there is none.
      */
-    DynInstPtr oldestReinsertable(unsigned bank,
-                                  const std::vector<bool> &or_bit_vec) const;
+    DynInstPtr oldestReinsertable(unsigned bank) const;
 
     /** Instructions picked last cycle, delivered to the IQ this cycle. Their
      *  bits stay set until delivery so their columns cannot be freed.
@@ -330,9 +330,30 @@ class WIB
 
     enum class ColState {Free, Waiting, Done};
 
-    std::vector<std::vector<bool>> bitVecArr;
-    // std::vector<int> freeCols;
-    // std::vector<bool> colDone;
+    /** The bit-vector array is not stored bit by bit: scanning 64 x 2048
+     *  bits every cycle dominated simulation time. An instruction's bit is
+     *  set exactly while it is parked (isInWIB()), in column bvaColIdx at
+     *  row wibIdx, so the structures below hold the same information.
+     */
+    struct OlderFirst
+    {
+        bool operator()(const DynInstPtr &a, const DynInstPtr &b) const;
+    };
+
+    /** Number of set bits in each column. */
+    std::vector<unsigned> colCount;
+
+    /** Instructions parked under each Waiting column. May hold squashed
+     *  entries; moved to readyInsts when the column's load completes.
+     */
+    std::vector<std::vector<DynInstPtr>> colMembers;
+
+    /** Per bank, the instructions whose bit is set in a Done column, oldest
+     *  first. A bank's list is in seqNum order, so the first one here is
+     *  the first match in the list against the OR of the Done columns.
+     */
+    std::vector<std::set<DynInstPtr, OlderFirst>> readyInsts;
+
     std::vector<ColState> colState;
     std::vector<InstSeqNum> colOwnerSeqNum;
     std::vector<int> bankPriorities;
